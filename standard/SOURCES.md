@@ -19,14 +19,20 @@ not exist, which in a project about unsubstantiated claims would be fatal.
 18 rules, all verified. Verbatim source text is in `regulatory-sources.md`;
 corpus observations are in `corpus/raw/*.jsonl` (179 rows).
 
-| Provenance | Rules | Confidence |
+| Provenance | Rules | Which |
 |---|---|---|
 | regulation, primary source read | 8 | POLICY-002, 004, 006, 007, 008, 009, 010, 011 |
 | regulation, secondary source only | 1 | POLICY-001 (Cosmetics Rules r.36 and CDSCO notice, both hosts 403'd) |
-| corpus, observed | 8 | POLICY-003, TONE-001 to 004, LANG-001 to 003 |
-| inference, ours | 1 | POLICY-005 |
+| corpus, observed | 7 | POLICY-003, TONE-001 to 004, LANG-001 to 002 |
+| inference, ours | 2 | POLICY-005, POLICY-012 |
 
 TONE-002 draws on both a primary ASCI guideline and corpus absence.
+
+POLICY-012 and `claims-registry.yaml` are labelled `inference` because they are
+our answer to a red-team finding, not a requirement anyone imposed on us. No
+regulator says "check citations against a registry". We concluded it because
+POLICY-003 could be defeated by fabricated substantiation and no prompt fixes
+that.
 
 **One rule rests on secondary sourcing.** POLICY-001 is the therapeutic-claim
 rule, and it is a BLOCK. Its wording is consistently reproduced across

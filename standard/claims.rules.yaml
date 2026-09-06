@@ -20,7 +20,7 @@
 # secondary means only through a publisher, because the government host refused
 # automated retrieval. See docs/CORRECTIONS.md C-004.
 
-version: "1.0.0"
+version: "1.1.0"
 
 rules:
   # ---------------------------------------------------------------- POLICY --
@@ -433,37 +433,24 @@ rules:
       Flag claims about visible change stated as fact without hedging language
       ("appearance of", "helps", "visibly") or a stated timeframe.
 
-  - id: LANG-003
-    dimension: language
-    severity: WARN
-    title: Name the active and what it does
-    provenance: corpus
-    source: "Corpus: mechanism-first structure across 15 claim_verb observations."
-    source_confidence: na
-    verified: true
-    rationale: >
-      Minimalist copy names the ingredient and states its action. Copy that
-      claims a specific skin outcome without attributing it to an ingredient is
-      off-register and harder to substantiate.
-      NARROWED after the eval showed the original firing on almost any short
-      creative fragment. A rule that fires on nearly everything is noise, and
-      noise is what makes reviewers abandon the tool.
-    guidance: >
-      Fire ONLY when the copy asserts a specific skin outcome (reduced acne,
-      faded pigmentation, improved texture, fewer wrinkles) and names no active
-      ingredient anywhere in the creative.
-      Do NOT fire on descriptions of texture, feel, application or routine.
-      "Treats your skin to a lightweight layer of hydration" describes texture,
-      not an outcome, and must pass.
-      Do NOT fire on statements reporting a study or test result, that is,
-      copy carrying a subject count, a proportion of users, or a named testing
-      body. "93% subjects saw significant reduction in active acne in 4 weeks"
-      is a reported result, not an unattributed benefit claim, and must pass.
-      Do NOT fire merely because a fragment is short.
-
 # CUT DELIBERATELY
+#
+# Two rules were proposed, built, and then removed. Both cuts are arguments, not
+# omissions, and both are in the decision doc.
+#
+# LANG-003, "name the active and what it does". Corpus-supported in principle:
+# Minimalist copy does name the ingredient and state its action. But the rule
+# produced a false positive in three consecutive eval runs and needed narrowing
+# twice. On the third strike it flagged "Reduces Acne, Blackheads & Excessive
+# Oil", which is real brand copy and the exact row the governing finding of this
+# whole standard rests on. A rule that flags the evidence for your own thesis is
+# not a rule, it is a rule-shaped guess. The structural pattern it was reaching
+# for is real; expressing it as a pass/fail check on a single creative is not
+# something we could make work.
 #
 # LANG-004, a safety note on actives-containing creative. The patch-test note
 # appears on 2 of 4 pages in corpus batch A and is absent from the Niacinamide
-# page. The brand is not consistent, so encoding it would be manufacturing a
-# pattern from noise. Cut rather than relabelled. See docs/RULE-PROPOSALS.md.
+# page. The brand is not consistent, so encoding it would have been
+# manufacturing a pattern from noise. Cut rather than relabelled as inference.
+#
+# See docs/RULE-PROPOSALS.md for what each looked like before it was cut.
