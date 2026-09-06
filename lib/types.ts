@@ -43,6 +43,13 @@ export const Rule = z.object({
   matcher: Matcher.optional(),
   /** Layer 2. Present means this rule is handed to the model as judgment guidance. */
   guidance: z.string().optional(),
+  /**
+   * This rule cannot be evaluated without ProductFacts. When facts are absent
+   * the rule is withheld from the prompt entirely, rather than being included
+   * with an instruction not to guess. Asking a model politely to skip a check
+   * is not a control; not giving it the check is.
+   */
+  requires_facts: z.boolean().default(false),
 });
 export type Rule = z.infer<typeof Rule>;
 
@@ -104,5 +111,11 @@ export const EvalCase = z.object({
   expectedVerdict: Verdict,
   expectedRules: z.array(z.string()).default([]),
   rationale: z.string(),
+  /**
+   * ProductFacts for rows that exercise facts-dependent rules. Without this,
+   * POLICY-005 is correctly withheld and a fabricated-concentration row can
+   * never be tested. Supplying it here is what makes that rule evaluable.
+   */
+  factsContext: z.string().optional(),
 });
 export type EvalCase = z.infer<typeof EvalCase>;

@@ -64,7 +64,15 @@ async function scoreDimension(
 ): Promise<{ dimension: Dimension; findings: Finding[]; failed: boolean }> {
   // Only rules with `guidance` are model-judged. A rule with a matcher alone is
   // layer 1's business and must not be double-reported.
-  const rules = book.active.filter((r) => r.dimension === dimension && r.guidance);
+  //
+  // Rules needing ProductFacts are withheld when facts are absent. The eval
+  // caught POLICY-005 blocking "Formulated with 2% Salicylic Acid" in a run
+  // that supplied no facts at all: the prompt had told the model not to guess,
+  // and it guessed. Structural exclusion, not instruction.
+  const rules = book.active.filter(
+    (r) =>
+      r.dimension === dimension && r.guidance && (!r.requires_facts || Boolean(factsContext))
+  );
   if (rules.length === 0) return { dimension, findings: [], failed: false };
 
   const prompt = buildPrompt(dimension, rules, text, factsContext);

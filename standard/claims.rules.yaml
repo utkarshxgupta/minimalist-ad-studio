@@ -73,16 +73,26 @@ rules:
       evidence. Competitors make comparable claims with none. So the violation is
       the missing evidence, not the strength of the claim.
     guidance: >
-      A quantified efficacy claim is any assertion of an effect carrying a number:
-      a percentage of effect, a proportion of users, or a result within a stated
-      number of days or weeks.
-      Such a claim must carry, within the same creative, at least one of: a
-      subject count, a study duration, or a named source.
-      PASSES: "93% subjects saw significant reduction in active acne in 4 weeks".
-      PASSES: "Thoroughly tested by an independent lab and confirmed SPF of 50".
+      A quantified efficacy claim is any assertion of an effect carrying a
+      number: a percentage of effect, a proportion of users, or a result within
+      a stated number of days or weeks.
+      Such a claim must carry, within the same creative, at least one of:
+      (a) a subject or sample count, (b) a named source, testing body or study,
+      or (c) an explicit reference to a clinical or lab result.
+      A BARE TIMEFRAME IS NOT EVIDENCE. "over 8 weeks of regular use" is a usage
+      instruction, not proof, and the same timeframe cannot both trigger this
+      rule and satisfy it. That circularity was a defect in an earlier version
+      of this rule and was found by the eval set.
+      PASSES: "93% subjects saw significant reduction in active acne in 4 weeks"
+      (subject count).
+      PASSES: "Thoroughly tested by an independent lab and confirmed SPF of 50"
+      (named source).
       FAILS: "Glow in 3 Days". FAILS: "fades dark spots in 14 days".
-      Do NOT flag a claim merely for being strong or confident. Quote the exact
-      claim span that lacks evidence.
+      FAILS: "Helps reduce the appearance of blemishes over 8 weeks of regular
+      use" (timeframe, no evidence).
+      Do NOT flag a claim merely for being strong or confident, and do not flag
+      an unquantified claim at all. Quote the exact claim span that lacks
+      evidence.
 
   - id: POLICY-004
     dimension: policy
@@ -118,6 +128,7 @@ rules:
     source: "Ours. Follows from the brand printing active concentrations on the front of the pack."
     source_confidence: na
     verified: true
+    requires_facts: true
     rationale: >
       A stated concentration that does not match the product page is a fabricated
       fact about a real product. On a brand whose entire position is front-of-pack
@@ -126,8 +137,7 @@ rules:
     guidance: >
       Every percentage in the ad that is attached to an ingredient must appear
       identically in ProductFacts.actives. Flag any that does not, quoting it
-      exactly. If no ProductFacts context was supplied, do not guess: say the
-      check could not be performed.
+      exactly.
 
   - id: POLICY-006
     dimension: policy
@@ -349,10 +359,23 @@ rules:
     verified: true
     rationale: >
       Minimalist copy names the ingredient and states its action. Copy that
-      claims a benefit without attributing it to an ingredient is off-register
-      and harder to substantiate.
+      claims a specific skin outcome without attributing it to an ingredient is
+      off-register and harder to substantiate.
+      NARROWED after the eval showed the original firing on almost any short
+      creative fragment. A rule that fires on nearly everything is noise, and
+      noise is what makes reviewers abandon the tool.
     guidance: >
-      Flag benefit claims that name no active ingredient and no mechanism.
+      Fire ONLY when the copy asserts a specific skin outcome (reduced acne,
+      faded pigmentation, improved texture, fewer wrinkles) and names no active
+      ingredient anywhere in the creative.
+      Do NOT fire on descriptions of texture, feel, application or routine.
+      "Treats your skin to a lightweight layer of hydration" describes texture,
+      not an outcome, and must pass.
+      Do NOT fire on statements reporting a study or test result, that is,
+      copy carrying a subject count, a proportion of users, or a named testing
+      body. "93% subjects saw significant reduction in active acne in 4 weeks"
+      is a reported result, not an unattributed benefit claim, and must pass.
+      Do NOT fire merely because a fragment is short.
 
 # CUT DELIBERATELY
 #

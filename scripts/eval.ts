@@ -65,7 +65,10 @@ async function main() {
   for (let i = 0; i < cases.length; i += CONCURRENCY) {
     const batch = cases.slice(i, i + CONCURRENCY);
     const out = await Promise.all(
-      batch.map(async (c) => ({ c, result: await scoreAd(c.text, { deterministicOnly }) }))
+      batch.map(async (c) => ({
+        c,
+        result: await scoreAd(c.text, { deterministicOnly, factsContext: c.factsContext }),
+      }))
     );
     scored.push(...out);
   }
