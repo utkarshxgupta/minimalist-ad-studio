@@ -49,3 +49,35 @@ export function loadRulebook(force = false): Rulebook {
 export function rulesFor(dimension: Rule["dimension"], book = loadRulebook()): Rule[] {
   return book.active.filter((r) => r.dimension === dimension);
 }
+
+export interface RegistryEntry {
+  id: string;
+  product: string;
+  claim: string;
+  evidence: string;
+  source_type: string;
+  note?: string;
+}
+
+let registryCache: { version: string; claims: RegistryEntry[] } | null = null;
+
+/**
+ * The substantiation registry. Loaded separately from the rulebook because it
+ * is owned by a different function: rules are written by whoever sets the
+ * standard, registry entries by whoever holds the studies.
+ */
+export function loadRegistry() {
+  if (registryCache) return registryCache;
+  const raw = readFileSync(join(process.cwd(), "standard", "claims-registry.yaml"), "utf8");
+  const doc = parse(raw) as { version: string; claims: RegistryEntry[] };
+  registryCache = { version: doc.version, claims: doc.claims ?? [] };
+  return registryCache;
+}
+
+/** Rendered into the policy prompt so POLICY-012 has something to check against. */
+export function registryDigest(): string {
+  const reg = loadRegistry();
+  return reg.claims
+    .map((c) => `- ${c.id} | ${c.product} | ${c.claim} | evidence: ${c.evidence}`)
+    .join("\n");
+}

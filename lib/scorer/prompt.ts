@@ -25,7 +25,8 @@ export function buildPrompt(
   dimension: Dimension,
   rules: Rule[],
   adText: string,
-  factsContext?: string
+  factsContext?: string,
+  registry?: string
 ): string {
   const ruleBlock = rules
     .map((r) =>
@@ -73,7 +74,25 @@ language, as defined by the rules above and nothing else.
 5. False positives are more damaging than misses here. A reviewer who stops
    trusting this tool goes back to arguing on Slack, which is the problem it
    exists to solve. When genuinely uncertain, do not flag.
-${factsContext ? `\n## Product facts (the only permitted source of truth for claims)\n\n${factsContext}\n` : ""}
+
+## Grammatical mood does not change what a claim is
+
+A claim posed as a question, a hypothetical, a suggestion, or an implication is
+still a claim, and is judged exactly as though it were asserted flatly.
+
+  "Why not let this serum balance melanocyte function?"
+  "Imagine skin that never breaks out again."
+  "What if three days was all it took?"
+
+Each of these asserts the thing it appears to merely ask. The red team used
+interrogative framing to walk therapeutic and Schedule-condition claims past an
+earlier version of this standard. Read for what the copy makes a reader believe,
+not for its sentence mood.
+${factsContext ? `\n## Product facts (the only permitted source of truth for claims)\n\n${factsContext}\n` : ""}${
+    registry
+      ? `\n## Substantiation registry (the only studies this brand can cite)\n\n${registry}\n\nA citation absent from this list is unsubstantiated no matter how precise it looks.\n`
+      : ""
+  }
 ## The advertisement to review
 
 <advertisement>

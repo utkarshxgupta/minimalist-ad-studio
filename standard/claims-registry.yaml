@@ -1,0 +1,71 @@
+# Substantiation registry.
+#
+# The list of claims this brand can actually back, and what backs them.
+#
+# WHY THIS EXISTS. The red team defeated POLICY-003 with fabricated citations:
+#
+#   "reduces periorbital wrinkle volume by 41% (independent double-blind
+#    vehicle-controlled study, n=62, 8-week consumer panel)"
+#
+# That passed cleanly, because POLICY-003 checks whether evidence is attached,
+# and it cannot check whether the evidence exists. No prompt fixes that. A model
+# has no way to know whether a study happened.
+#
+# So the check moves from "is a study cited" to "is the cited study one of ours".
+# That converts an unverifiable inference problem into a data lookup, which is
+# the kind of problem an organisation can actually own.
+#
+# HONEST STATUS: the entries below are real, extracted from beminimalist.co
+# during corpus collection. But this file is a demonstration of the mechanism,
+# not a complete registry. A production version is maintained by whoever owns
+# claim substantiation, is versioned alongside the studies themselves, and has
+# an entry for every claim the brand is willing to make. Building that registry
+# is the unbuilt half of this control, and it is a process problem more than a
+# software one. See docs/FAILURE-MODES.md.
+
+version: "0.1.0"
+
+claims:
+  - id: SUB-001
+    product: "Multi-Vitamin SPF 50 Sunscreen"
+    claim: "SPF 50 confirmed"
+    evidence: "In-vivo test, Advanced Science Laboratories, independent third party. SPF value obtained 56.6."
+    source_type: independent_lab
+
+  - id: SUB-002
+    product: "Salicylic Acid 2% Face Serum"
+    claim: "Reduction in active acne"
+    evidence: "93% of subjects saw significant reduction in active acne in 4 weeks. Consumer study."
+    source_type: consumer_study
+
+  - id: SUB-003
+    product: "Salicylic Acid 2% Face Serum"
+    claim: "Visible skin clarity"
+    evidence: "90% of subjects noticed visible skin clarity in 4 weeks. Consumer study."
+    source_type: consumer_study
+
+  - id: SUB-004
+    product: "Niacinamide 10% Face Serum"
+    claim: "Reduced oiliness"
+    evidence: "97% of subjects said skin felt less oily throughout the day after 2 weeks."
+    source_type: consumer_study
+
+  - id: SUB-005
+    product: "Alpha Arbutin 2% Serum"
+    claim: "Melanin reduction versus a benchmark product"
+    evidence: "In-vitro test on a skin-identical model, against an Alpha Arbutin 2% serum from another brand. 70% melanin reduction versus 56% for the benchmark."
+    source_type: in_vitro
+    note: "The benchmark is unnamed in the published copy. See POLICY-006."
+
+  - id: SUB-006
+    product: "Hyaluronic + PGA 2% Serum"
+    claim: "Hydration versus a benchmark product"
+    evidence: "Approximately 26% more hydration than the benchmark product across an 8-hour testing window."
+    source_type: in_vitro
+    note: "Benchmark unnamed, and the figure is approximated. See POLICY-006 and POLICY-007."
+
+  - id: SUB-007
+    product: "Salicylic Acid 2% Face Serum"
+    claim: "Blackhead reduction from White Horehound Extract"
+    evidence: "Clinically proven to reduce number of blackheads by 50%. Ingredient supplier data."
+    source_type: supplier_data

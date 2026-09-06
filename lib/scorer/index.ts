@@ -32,6 +32,31 @@ export function verifySpans(
   return { kept, dropped };
 }
 
+/**
+ * Several rules now carry both a matcher and model guidance: the matcher is a
+ * fast, reproducible path for the obvious phrasings, the guidance generalises to
+ * the paraphrases a term list can never enumerate. That means both layers can
+ * report the same rule over the same words.
+ *
+ * When they overlap, layer 1 wins. It is deterministic, so a reviewer can rerun
+ * it and get the identical result, which is the property the whole tool is for.
+ */
+function dropDuplicatesOfDeterministic(det: Finding[], model: Finding[]): Finding[] {
+  return model.filter((m) => {
+    const overlapping = det.filter(
+      (d) =>
+        d.ruleId === m.ruleId &&
+        d.start !== undefined &&
+        d.end !== undefined &&
+        m.start !== undefined &&
+        m.end !== undefined &&
+        d.start < m.end &&
+        m.start < d.end
+    );
+    return overlapping.length === 0;
+  });
+}
+
 export function computeVerdict(findings: Finding[]): Verdict {
   if (findings.some((f) => f.severity === "BLOCK")) return "BLOCK";
   if (findings.some((f) => f.severity === "WARN")) return "WARN";
@@ -79,7 +104,7 @@ export async function scoreAd(text: string, opts: ScoreOptions = {}): Promise<Sc
     dimensionsFailed = res.dimensionsFailed;
   }
 
-  const findings = [...det, ...model];
+  const findings = [...det, ...dropDuplicatesOfDeterministic(det, model)];
 
   // Fail closed. If the policy check did not run, we cannot certify the ad,
   // and a silent PASS on an unrun compliance check is the most expensive bug

@@ -1,7 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { z } from "zod";
 import type { Dimension, Finding, Rule } from "@/lib/types";
-import type { Rulebook } from "@/lib/standard/loader";
+import { registryDigest, type Rulebook } from "@/lib/standard/loader";
 import { buildPrompt, RESPONSE_SCHEMA } from "./prompt";
 
 export const MODEL = "gemini-3.8-flash";
@@ -61,7 +61,7 @@ async function scoreDimension(
   text: string,
   factsContext: string | undefined,
   byId: Map<string, Rule>
-): Promise<{ dimension: Dimension; findings: Finding[]; failed: boolean }> {
+): Promise<{ dimension: Dimension; findings: Finding[]; failed: boolean; reason?: string }> {
   // Only rules with `guidance` are model-judged. A rule with a matcher alone is
   // layer 1's business and must not be double-reported.
   //
@@ -75,7 +75,15 @@ async function scoreDimension(
   );
   if (rules.length === 0) return { dimension, findings: [], failed: false };
 
-  const prompt = buildPrompt(dimension, rules, text, factsContext);
+  // The registry is only meaningful to the policy dimension, and shipping it to
+  // the tone and language calls would be tokens spent on nothing.
+  const prompt = buildPrompt(
+    dimension,
+    rules,
+    text,
+    factsContext,
+    dimension === "policy" ? registryDigest() : undefined
+  );
 
   for (let attempt = 0; attempt < 2; attempt++) {
     try {
@@ -109,8 +117,16 @@ async function scoreDimension(
         });
       }
       return { dimension, findings, failed: false };
-    } catch {
-      if (attempt === 1) return { dimension, findings: [], failed: true };
+    } catch (e) {
+      if (attempt === 1) {
+        // Surfaced, not swallowed. A silent catch here once cost an hour: the
+        // fail-closed path correctly BLOCKed everything, which looked like a
+        // scoring bug rather than an exhausted API quota. A failure that hides
+        // its cause makes the safe behaviour indistinguishable from a broken one.
+        const reason = e instanceof Error ? e.message : String(e);
+        console.warn(`[scorer] ${dimension} dimension failed after retry: ${reason}`);
+        return { dimension, findings: [], failed: true, reason };
+      }
     }
   }
   return { dimension, findings: [], failed: true };

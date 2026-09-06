@@ -41,6 +41,20 @@ rules:
     matcher:
       type: regex
       pattern: "\\b(cures?|curing|heals?|healing|treatment for|medicine for|remedy for)\\b\\s*\\w{0,12}\\s*\\b(acne|pimples?|eczema|psoriasis|rosacea|dermatitis|melasma|hyperpigmentation|scars?)\\b"
+    # The matcher is a fast path for the obvious phrasings. It is not the rule.
+    # The red team walked straight past it with "heal chronic cystic flare-ups"
+    # and "purge cystic pathogenesis", neither of which contains a listed
+    # condition. A term list only catches phrasings you already thought of, and
+    # thinking of new ones is exactly the adversary's job.
+    guidance: >
+      Flag any claim that the product treats, cures, heals, resolves, eradicates
+      or eliminates a medical condition, however phrased. Clinical or Latinate
+      paraphrase does not exempt it: "purge cystic pathogenesis", "eradicate
+      dermal bacterial infections" and "resolve inflammatory dermatoses" are all
+      therapeutic claims.
+      Cosmetic-register claims about appearance are NOT therapeutic. "Helps
+      reduce the appearance of blemishes" is fine. The line is treating a
+      condition versus improving an appearance.
 
   - id: POLICY-002
     dimension: policy
@@ -59,6 +73,16 @@ rules:
     matcher:
       type: lexicon
       terms: ["leucoderma", "vitiligo", "lupus", "trachoma"]
+    # Same lesson as POLICY-001. The red team reached leucoderma without naming
+    # it, via "patchy depigmentation and autoimmune skin conditions".
+    guidance: >
+      Flag claims to treat or improve a condition in the D&MR Act Schedule even
+      when the condition is described rather than named. Leucoderma reached by
+      paraphrase is still leucoderma: "patchy depigmentation", "loss of skin
+      pigment in patches", "autoimmune white patches" all describe it.
+      Do NOT flag ordinary cosmetic pigmentation language. "Fades dark spots"
+      and "evens skin tone" concern hyperpigmentation, which is not in the
+      Schedule and is a normal cosmetic claim.
 
   - id: POLICY-003
     dimension: policy
@@ -135,9 +159,13 @@ rules:
       concentration disclosure, this is the worst single output the tool could
       produce.
     guidance: >
-      Every percentage in the ad that is attached to an ingredient must appear
-      identically in ProductFacts.actives. Flag any that does not, quoting it
-      exactly.
+      Every concentration in the ad that is attached to an ingredient must
+      appear identically in ProductFacts.actives. Flag any that does not,
+      quoting it exactly.
+      CONCENTRATIONS WRITTEN AS WORDS COUNT. "twelve percent pure Ethyl
+      Ascorbic Acid" and "five percent Niacinamide" are concentration claims and
+      must be checked exactly as though they were digits. The red team used this
+      to walk a fabricated concentration straight through.
 
   - id: POLICY-006
     dimension: policy
@@ -156,7 +184,18 @@ rules:
       disclosure, not fabrication.
     matcher:
       type: regex
-      pattern: "\\b(the benchmark product|benchmark product|than other \\w+|than the leading|vs\\.? leading|compared to other)\\b"
+      pattern: "\\b(the benchmark product|benchmark product|than other \\w+|than the leading|vs\\.? leading|compared to other|ordinary \\w+|regular \\w+ (?:serums?|creams?|sunscreens?))\\b"
+    guidance: >
+      A comparison against an unnamed CATEGORY is still a comparative claim.
+      "Standard drugstore sunscreens leave chalky residue", "off-the-shelf
+      market alternatives destabilize under UV" and "unlike ordinary serums"
+      all assert a factual comparison the advertiser must be able to
+      substantiate, and none of them make clear what is being compared with
+      what, as ASCI 4.1(a) requires.
+      Flag comparisons whether the other side is a named product, an unnamed
+      benchmark, or a whole category.
+      Do NOT flag comparisons against the reader's own prior state ("smoother
+      than before") or against not using the product.
 
   - id: POLICY-007
     dimension: policy
@@ -249,6 +288,36 @@ rules:
       or unsuccessful, or that links skin tone to social, romantic, marital or
       professional prospects. When scoring an image, describe what in the image
       triggers the finding.
+
+  - id: POLICY-012
+    dimension: policy
+    severity: BLOCK
+    title: Cited study is not in the substantiation registry
+    provenance: inference
+    source: "Ours. Response to a red-team finding, see docs/FAILURE-MODES.md and standard/claims-registry.yaml."
+    source_confidence: na
+    verified: true
+    rationale: >
+      POLICY-003 asks whether evidence is attached. It cannot ask whether the
+      evidence exists. The red team defeated it with fabricated but
+      plausible-looking citations, including a protocol number and a subject
+      count, and those passed cleanly.
+      No prompt fixes this: a model cannot know whether a study happened. So the
+      check moves from "is a study cited" to "is the cited study one of ours",
+      which is a lookup rather than an inference.
+      DETAIL IS NOT EVIDENCE. A more specific fake citation is more dangerous
+      than a vague one, not less.
+    guidance: >
+      If the advertisement cites a study, trial, protocol, clinical result,
+      consumer panel, sample size or testing body, that citation must correspond
+      to an entry in the substantiation registry supplied below.
+      Flag any citation with no matching registry entry, quoting the citation
+      exactly. Do this regardless of how detailed, technical or credible the
+      citation appears. A protocol identifier and an n= figure are not evidence
+      that a study exists.
+      Do NOT flag copy that makes no citation at all: that is POLICY-003's job.
+      Do NOT flag a citation that matches a registry entry even loosely in
+      wording, provided the product and the substance of the claim line up.
 
   # ------------------------------------------------------------------ TONE --
 
