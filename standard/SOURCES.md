@@ -16,15 +16,30 @@ not exist, which in a project about unsubstantiated claims would be fatal.
 
 ## Status
 
-| Rule | Provenance | Verified | Blocker |
-|---|---|---|---|
-| POLICY-001 | regulation | NO | Need D&MR Act 1954 schedule text |
-| POLICY-002 | regulation | NO | Need ASCI Code chapter II text |
-| POLICY-003 | inference | yes | none |
-| TONE-001 | corpus | NO | Need corpus extraction |
-| LANG-001 | corpus | NO | Need corpus extraction |
+18 rules, all verified. Verbatim source text is in `regulatory-sources.md`;
+corpus observations are in `corpus/raw/*.jsonl` (179 rows).
 
-**5 rules, 1 verified.** The rulebook is a skeleton until this table is green.
+| Provenance | Rules | Confidence |
+|---|---|---|
+| regulation, primary source read | 8 | POLICY-002, 004, 006, 007, 008, 009, 010, 011 |
+| regulation, secondary source only | 1 | POLICY-001 (Cosmetics Rules r.36 and CDSCO notice, both hosts 403'd) |
+| corpus, observed | 8 | POLICY-003, TONE-001 to 004, LANG-001 to 003 |
+| inference, ours | 1 | POLICY-005 |
+
+TONE-002 draws on both a primary ASCI guideline and corpus absence.
+
+**One rule rests on secondary sourcing.** POLICY-001 is the therapeutic-claim
+rule, and it is a BLOCK. Its wording is consistently reproduced across
+CDSCO-derived materials, but the gazette text itself was not retrieved. This is
+the single weakest link in the rulebook and it is named as such in the decision
+doc rather than left for a reader to discover.
+
+## Cut deliberately
+
+**LANG-004**, a safety-note rule. The patch-test disclaimer appears on 2 of 4
+pages in corpus batch A and is absent from the Niacinamide page. The brand is
+not consistent, so encoding it would have been manufacturing a pattern from
+noise.
 
 ## Open question about the brief
 

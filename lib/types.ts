@@ -29,6 +29,13 @@ export const Rule = z.object({
   title: z.string(),
   provenance: Provenance,
   source: z.string(),
+  /**
+   * Whether the cited text was read in the original, or only through a
+   * secondary publisher. Two load-bearing citations here are secondary because
+   * the government hosts refused automated retrieval. Recorded rather than
+   * glossed, so a reader can weight the rule accordingly.
+   */
+  source_confidence: z.enum(["primary", "secondary", "na"]).default("na"),
   /** Checked against actual source text by a human. Regulation rules are inert until true. */
   verified: z.boolean().default(false),
   rationale: z.string(),

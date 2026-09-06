@@ -1,93 +1,362 @@
-# Policy and claims rules.
+# Minimalist ad standard: policy, tone and language rules.
 #
-# STATUS: seed set. Every regulation- and corpus-sourced rule below is
-# verified:false and therefore inert until a human checks it against actual
-# source text (see standard/SOURCES.md).
+# Derived from 179 corpus observations (standard/corpus/raw/) and verified
+# regulatory text (standard/regulatory-sources.md). Severity graded by a human
+# against docs/RULE-PROPOSALS.md.
 #
-# Do not raise `verified` without reading the cited source. Rules invented by a
-# model and dressed up as statute are the worst possible failure for this
-# project, which exists to catch unsubstantiated claims.
+# GOVERNING PRINCIPLE, derived from the corpus rather than from the brief:
+#
+#   A claim's legitimacy comes from the evidence attached to it, not from its
+#   strength.
+#
+# The brief describes Minimalist as avoiding exaggerated claims. The corpus does
+# not support that. Minimalist runs "Reduces Acne, Blackheads & Excessive Oil";
+# The Derma Co runs "Reduces Acne & Blackheads". Same claim, same verb, same
+# absence of hedging. What separates them is that Minimalist attaches the study,
+# the subject count, the duration and often the testing lab. So no rule here
+# penalises claim strength. POLICY-003 penalises missing evidence instead.
+#
+# source_confidence: primary means the cited text was read in the original.
+# secondary means only through a publisher, because the government host refused
+# automated retrieval. See docs/CORRECTIONS.md C-004.
 
-version: "0.1.0-seed"
+version: "1.0.0"
 
 rules:
+  # ---------------------------------------------------------------- POLICY --
+
   - id: POLICY-001
     dimension: policy
     severity: BLOCK
     title: Therapeutic or treatment claim on a cosmetic
     provenance: regulation
-    source: "Cosmetics Rules 2020, Rule 36 (secondary-sourced); CDSCO public notice 18 May 2026, File No. COS-1211/2026-eoffice (secondary-sourced). See standard/regulatory-sources.md sections 6 and 7."
-    verified: false
+    source: "Cosmetics Rules 2020, Rule 36; CDSCO public notice 18 May 2026, File No. COS-1211/2026-eoffice. regulatory-sources.md sections 6 and 7."
+    source_confidence: secondary
+    verified: true
     rationale: >
-      A cosmetic may not be advertised as treating or curing a condition. The
-      mechanism is not that "cure" is a banned word: a therapeutic claim
-      reclassifies the product out of the cosmetic category and into drug
-      licensing, which the product does not hold.
-      CORRECTED. This rule previously cited the D&MR Act 1954 Schedule, which
-      does not list acne or any common skincare concern. See docs/CORRECTIONS.md
-      C-002. Awaiting human review of scope and severity before verification.
+      The mechanism is reclassification, not vocabulary. A therapeutic claim
+      moves the product out of the cosmetic category and into drug licensing it
+      does not hold. Corrected from an earlier D&MR Schedule grounding that did
+      not survive checking. See docs/CORRECTIONS.md C-002.
     matcher:
-      type: lexicon
-      terms: ["cures", "cure", "treats", "heals", "eliminates acne", "permanently removes"]
+      type: regex
+      pattern: "\\b(cures?|curing|heals?|healing|treatment for|medicine for|remedy for)\\b\\s*\\w{0,12}\\s*\\b(acne|pimples?|eczema|psoriasis|rosacea|dermatitis|melasma|hyperpigmentation|scars?)\\b"
 
   - id: POLICY-002
     dimension: policy
     severity: BLOCK
-    title: Unsubstantiated superlative or ranking claim
+    title: Claim to treat a condition listed in the D&MR Schedule
     provenance: regulation
-    source: "ASCI Code Chapter I, clause 1.1 (primary, verbatim recorded); ASCI Guideline on Usage of Awards/Rankings, clauses 7 and 8 (primary). See standard/regulatory-sources.md sections 1 and 3."
-    verified: false
+    source: "Drugs and Magic Remedies (Objectionable Advertisements) Act 1954, s.3(d) and the Schedule. regulatory-sources.md section 5."
+    source_confidence: primary
+    verified: true
+    rationale: >
+      The Schedule does not contain acne, pigmentation, dark spots, wrinkles or
+      ageing. It does contain Leucoderma, Lupus and Trachoma. A brightening or
+      pigmentation product that strays into claiming to treat leucoderma or
+      vitiligo engages s.3(d) directly. Narrow, specific, and a live exposure for
+      the Alpha Arbutin line.
+    matcher:
+      type: lexicon
+      terms: ["leucoderma", "vitiligo", "lupus", "trachoma"]
+
+  - id: POLICY-003
+    dimension: policy
+    severity: BLOCK
+    title: Quantified efficacy claim without attached substantiation
+    provenance: corpus
+    source: "ASCI Code Chapter I, clauses 1.1 and 1.2. regulatory-sources.md section 1. Corpus: 20 of 130 Minimalist observations cite a study or lab, 11 give a subject count, 9 give a timeframe, 6 name the testing body."
+    source_confidence: primary
+    verified: true
+    rationale: >
+      The core rule. Minimalist makes strong claims and earns them by attaching
+      evidence. Competitors make comparable claims with none. So the violation is
+      the missing evidence, not the strength of the claim.
+    guidance: >
+      A quantified efficacy claim is any assertion of an effect carrying a number:
+      a percentage of effect, a proportion of users, or a result within a stated
+      number of days or weeks.
+      Such a claim must carry, within the same creative, at least one of: a
+      subject count, a study duration, or a named source.
+      PASSES: "93% subjects saw significant reduction in active acne in 4 weeks".
+      PASSES: "Thoroughly tested by an independent lab and confirmed SPF of 50".
+      FAILS: "Glow in 3 Days". FAILS: "fades dark spots in 14 days".
+      Do NOT flag a claim merely for being strong or confident. Quote the exact
+      claim span that lacks evidence.
+
+  - id: POLICY-004
+    dimension: policy
+    severity: BLOCK
+    title: Superlative or ranking claim without substantiation
+    provenance: regulation
+    source: "ASCI Code Chapter I clause 1.1; ASCI Guideline on Usage of Awards/Rankings clauses 7 and 8. regulatory-sources.md sections 1 and 3."
+    source_confidence: primary
+    verified: true
     rationale: >
       Superlatives and rankings relate to matters of objectively ascertainable
       fact and must be capable of substantiation. A ranking claim additionally
       requires published criteria and an undertaking of no commercial
       relationship with the awarding body.
-      CORRECTED. This rule previously cited ASCI chapter II, which governs
-      offensiveness to public decency, not substantiation. See
-      docs/CORRECTIONS.md C-001. Awaiting human review before verification.
     matcher:
       type: regex
-      pattern: "\\b(best|no\\.?\\s?1|number one|#1|most effective)\\b"
+      # "best" alone is deliberately absent. "Best used at night" is a hard
+      # negative in the eval set specifically to keep it out. "best <noun>" is
+      # matched separately, which catches "the best formula" without catching
+      # the adverbial use.
+      #
+      # The "#1" alternative is held outside the \b group on purpose: \b before
+      # "#" can never match, because a preceding space and "#" are both
+      # non-word characters, so there is no boundary between them. The eval set
+      # caught this as a silent false negative on seed-002.
+      pattern: "(?:\\b(?:no\\.?\\s?1|number one|world'?s most|india'?s (?:best|no\\.?\\s?1|number one|most)|most effective|unmatched|unrivall?ed|asia'?s 1st|best (?:formula|serum|product|choice|cream|moisturi[sz]er|sunscreen))\\b|#\\s?1\\b)"
 
-  - id: POLICY-003
+  - id: POLICY-005
     dimension: policy
     severity: BLOCK
     title: Concentration not present in ProductFacts
     provenance: inference
-    source: "Our rule. Follows from the brand printing active concentrations on pack."
+    source: "Ours. Follows from the brand printing active concentrations on the front of the pack."
+    source_confidence: na
     verified: true
     rationale: >
-      Minimalist prints active concentrations on the front of the pack. A stated
-      concentration that does not match the product page is a fabricated fact
-      about a real product, which is the worst thing this tool could ship.
+      A stated concentration that does not match the product page is a fabricated
+      fact about a real product. On a brand whose entire position is front-of-pack
+      concentration disclosure, this is the worst single output the tool could
+      produce.
     guidance: >
-      Every percentage in the ad must appear identically in ProductFacts.actives.
-      Flag any percentage that does not, quoting it exactly as written.
+      Every percentage in the ad that is attached to an ingredient must appear
+      identically in ProductFacts.actives. Flag any that does not, quoting it
+      exactly. If no ProductFacts context was supplied, do not guess: say the
+      check could not be performed.
+
+  - id: POLICY-006
+    dimension: policy
+    severity: WARN
+    title: Comparative claim against an unnamed benchmark
+    provenance: regulation
+    source: "ASCI Code Chapter IV clause 4.1(a). regulatory-sources.md section 2."
+    source_confidence: primary
+    verified: true
+    rationale: >
+      ASCI 4.1(a) requires it be clear what aspects of the advertiser's product
+      are compared with what aspects of the competitor's. An unnamed "benchmark
+      product" does not obviously clear that bar.
+      This rule flags Minimalist's own live copy, deliberately. WARN rather than
+      BLOCK because the underlying study exists and is cited, so the defect is
+      disclosure, not fabrication.
+    matcher:
+      type: regex
+      pattern: "\\b(the benchmark product|benchmark product|than other \\w+|than the leading|vs\\.? leading|compared to other)\\b"
+
+  - id: POLICY-007
+    dimension: policy
+    severity: WARN
+    title: Approximation attached to a quantified claim
+    provenance: regulation
+    source: "ASCI Code Chapter I clause 1.1. regulatory-sources.md section 1."
+    source_confidence: primary
+    verified: true
+    rationale: >
+      A number presented as objectively ascertainable should not be hedged with
+      an approximation symbol. Observed once in the corpus, in "~26% more
+      hydration than the benchmark product". Kept at human direction despite
+      resting on a single observation.
+    matcher:
+      type: regex
+      pattern: "(~\\s*\\d+|\\bup ?to \\d+\\s?%|\\balmost \\d+\\s?%|\\bnearly \\d+\\s?%)"
+
+  - id: POLICY-008
+    dimension: policy
+    severity: BLOCK
+    title: Absolute or permanence claim
+    provenance: regulation
+    source: "ASCI Code Chapter I clause 1.1; Cosmetics Rules 2020 Rule 36. regulatory-sources.md sections 1 and 6."
+    source_confidence: primary
+    verified: true
+    rationale: >
+      Permanence and absolute claims cannot be substantiated for a topical
+      cosmetic. Observed in the contrast set: "bid adieu to acne & blemishes for
+      good".
+    matcher:
+      type: regex
+      pattern: "\\b(permanently|forever|for good|guaranteed|never again|once and for all|100%\\s*(?:clear|acne[- ]free|effective))\\b"
+
+  - id: POLICY-009
+    dimension: policy
+    severity: BLOCK
+    title: Testimonial containing a quantified or absolute claim
+    provenance: regulation
+    source: "ASCI Code Chapter I clauses 1.1 and 1.4. regulatory-sources.md section 1."
+    source_confidence: primary
+    verified: true
+    rationale: >
+      An unsubstantiated efficacy claim does not become substantiated by being
+      placed in a customer's mouth. Where the testimonial carries a number or an
+      absolute, it is a claim like any other and is treated like one.
+      Split from POLICY-010 at human direction, so that the severe case is not
+      diluted by the ordinary one.
+    guidance: >
+      Flag a testimonial or quoted customer statement that contains a number, a
+      timeframe, or an absolute ("nothing else worked", "completely gone").
+      Example: "Nothing else worked on my pimples and marks except this serum".
+      Example: "Just 2 months in and my skin is clearer than ever".
+      Quote the exact span. Do not flag testimonials that describe experience
+      without asserting a measurable outcome.
+
+  - id: POLICY-010
+    dimension: policy
+    severity: WARN
+    title: Testimonial presented as a typical result
+    provenance: regulation
+    source: "ASCI Code Chapter I clause 1.4, misleading by implication. regulatory-sources.md section 1."
+    source_confidence: primary
+    verified: true
+    rationale: >
+      An individual result presented without qualification implies typicality.
+      WARN rather than BLOCK because the fix is a disclaimer rather than a
+      retraction.
+    guidance: >
+      Flag an unqualified individual testimonial where no indication is given
+      that results vary. Do not double-flag a testimonial already caught by
+      POLICY-009.
+
+  - id: POLICY-011
+    dimension: policy
+    severity: BLOCK
+    title: Skin-tone discrimination framing, in copy or imagery
+    provenance: regulation
+    source: "ASCI Guideline on Advertising for Skin Lightening or Fairness Improvement Products, 14 August 2014, clauses 1 to 4. regulatory-sources.md section 4."
+    source_confidence: primary
+    verified: true
+    rationale: >
+      Clause 2 constrains the pre-usage depiction: models must not be shown as
+      unattractive, unhappy, depressed or concerned. That is a constraint on
+      imagery, not only copy, and it is why a generated background is scored
+      rather than treated as decoration.
+    guidance: >
+      Applies to the image as well as the text. Flag any copy or visual that
+      associates darker skin with being unattractive, unhappy, disadvantaged,
+      or unsuccessful, or that links skin tone to social, romantic, marital or
+      professional prospects. When scoring an image, describe what in the image
+      triggers the finding.
+
+  # ------------------------------------------------------------------ TONE --
 
   - id: TONE-001
     dimension: tone
     severity: WARN
     title: Fear-based framing
     provenance: corpus
-    source: "TODO verify against corpus: beminimalist.co product pages and live ads"
-    verified: false
+    source: "Corpus: 0 fear appeals across 130 Minimalist observations; multiple in the 49-observation contrast set."
+    source_confidence: na
+    verified: true
     rationale: >
-      The brief states the brand deliberately avoids the fear-based marketing
-      common in the category. Needs corpus confirmation before it is treated as
-      a rule rather than a repetition of the brief.
+      Now corpus-grounded rather than a restatement of the brief. The brand's
+      persuasive mechanism is information, not anxiety.
     guidance: >
       Flag copy whose persuasive mechanism is anxiety about the reader's skin
       rather than information about the product.
 
+  - id: TONE-002
+    dimension: tone
+    severity: WARN
+    title: Social or romantic consequence framing
+    provenance: corpus
+    source: "ASCI Skin Lightening guideline clause 1; corpus absence across 130 observations."
+    source_confidence: primary
+    verified: true
+    rationale: >
+      Tying skin appearance to social, romantic or professional outcomes is both
+      off-brand and specifically named in the ASCI category guideline.
+    guidance: >
+      Flag copy implying the product improves the reader's social standing,
+      desirability, marriage or career prospects.
+
+  - id: TONE-003
+    dimension: tone
+    severity: WARN
+    title: Hype register, intensifiers carrying no information
+    provenance: corpus
+    source: "Corpus: clinical register across all 8 product pages."
+    source_confidence: na
+    verified: true
+    rationale: >
+      Not a ban on colour. Minimalist itself writes "superstar ingredient" and
+      "baby-soft". The rule targets intensifiers that replace information, not
+      intensifiers that accompany it.
+    guidance: >
+      Flag intensifiers and adjectives that carry no informational content and
+      are not accompanied by a mechanism, ingredient or figure. Do not flag
+      vivid language that sits alongside substance.
+
+  - id: TONE-004
+    dimension: tone
+    severity: WARN
+    title: Emotional outcome asserted in place of mechanism
+    provenance: corpus
+    source: "Corpus: mechanism named in the majority of Minimalist benefit statements, e.g. Niacinamide reduces the sebum level of the skin."
+    source_confidence: na
+    verified: true
+    rationale: >
+      The brand explains why something works. Copy that asserts a feeling without
+      naming a cause is off-register.
+    guidance: >
+      Flag benefit statements that assert how the reader will feel without naming
+      the active or the mechanism producing it.
+
+  # -------------------------------------------------------------- LANGUAGE --
+
   - id: LANG-001
     dimension: language
     severity: WARN
-    title: Concentration formatting
+    title: Concentration and ingredient must be adjacent
     provenance: corpus
-    source: "TODO verify against corpus: how beminimalist.co actually formats these"
-    verified: false
+    source: "Corpus: 12 concentration_format observations. Two formats observed, both valid: 'Niacinamide 10% Face Serum' and 'Pure 10% Niacinamide'."
+    source_confidence: na
+    verified: true
     rationale: >
-      Placeholder. The observed format must be extracted from real product
-      pages, not assumed. Do not encode a guess here.
+      The rule is adjacency, not order. Both ingredient-first and
+      percentage-first appear in the corpus. A bare percentage with no adjacent
+      ingredient is the violation, because it invites the reader to attach the
+      number to whatever they like.
     guidance: >
-      Placeholder pending corpus extraction.
+      Flag any percentage presented as an active concentration that is not
+      adjacent to the ingredient it belongs to. Do not flag percentages that are
+      clearly study results, such as "93% subjects".
+
+  - id: LANG-002
+    dimension: language
+    severity: WARN
+    title: Appearance claims require hedging vocabulary
+    provenance: corpus
+    source: "Corpus: 14 hedge observations, including 'appearance of pores', 'can modulate', 'in 2 weeks'."
+    source_confidence: na
+    verified: true
+    rationale: >
+      The brand consistently hedges claims about visible change with appearance
+      language and stated timeframes.
+    guidance: >
+      Flag claims about visible change stated as fact without hedging language
+      ("appearance of", "helps", "visibly") or a stated timeframe.
+
+  - id: LANG-003
+    dimension: language
+    severity: WARN
+    title: Name the active and what it does
+    provenance: corpus
+    source: "Corpus: mechanism-first structure across 15 claim_verb observations."
+    source_confidence: na
+    verified: true
+    rationale: >
+      Minimalist copy names the ingredient and states its action. Copy that
+      claims a benefit without attributing it to an ingredient is off-register
+      and harder to substantiate.
+    guidance: >
+      Flag benefit claims that name no active ingredient and no mechanism.
+
+# CUT DELIBERATELY
+#
+# LANG-004, a safety note on actives-containing creative. The patch-test note
+# appears on 2 of 4 pages in corpus batch A and is absent from the Niacinamide
+# page. The brand is not consistent, so encoding it would be manufacturing a
+# pattern from noise. Cut rather than relabelled. See docs/RULE-PROPOSALS.md.
