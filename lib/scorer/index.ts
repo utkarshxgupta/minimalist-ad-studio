@@ -68,6 +68,7 @@ export async function scoreAd(text: string, opts: ScoreOptions = {}): Promise<Sc
   let model: Finding[] = [];
   let dropped = 0;
   let modelName = "none";
+  let dimensionsFailed: Dimension[] = [];
 
   if (!opts.deterministicOnly) {
     const res = await scoreModel(text, book, opts.factsContext);
@@ -75,12 +76,19 @@ export async function scoreAd(text: string, opts: ScoreOptions = {}): Promise<Sc
     model = verified.kept;
     dropped = verified.dropped;
     modelName = res.model;
+    dimensionsFailed = res.dimensionsFailed;
   }
 
   const findings = [...det, ...model];
 
+  // Fail closed. If the policy check did not run, we cannot certify the ad,
+  // and a silent PASS on an unrun compliance check is the most expensive bug
+  // this system could have.
+  const verdict =
+    dimensionsFailed.includes("policy") ? "BLOCK" : computeVerdict(findings);
+
   return {
-    verdict: computeVerdict(findings),
+    verdict,
     dimensionScores: dimensionScores(findings),
     findings,
     meta: {
@@ -89,6 +97,7 @@ export async function scoreAd(text: string, opts: ScoreOptions = {}): Promise<Sc
       droppedFindings: dropped,
       // Surfaced so nobody reads a clean PASS as meaning the rulebook is complete.
       unverifiedRulesApplied: book.unverified.length,
+      dimensionsFailed,
     },
   };
 }

@@ -76,6 +76,11 @@ export const ScoreResult = z.object({
     /** Model findings discarded because their quoted span was not in the input. */
     droppedFindings: z.number(),
     unverifiedRulesApplied: z.number(),
+    /**
+     * Dimensions whose model call failed. If `policy` is here, the verdict is
+     * forced to BLOCK: an unrun compliance check must never read as a pass.
+     */
+    dimensionsFailed: z.array(Dimension).default([]),
   }),
 });
 export type ScoreResult = z.infer<typeof ScoreResult>;

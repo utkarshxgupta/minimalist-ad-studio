@@ -15,8 +15,16 @@ import { EvalCase, type Verdict } from "../lib/types";
 import { loadRulebook } from "../lib/standard/loader";
 import { scoreAd } from "../lib/scorer";
 
+// Next.js loads .env.local for the app; a plain tsx script does not.
+try {
+  process.loadEnvFile(".env.local");
+} catch {
+  /* no local env, layer 2 will report itself as skipped */
+}
+
 const VERDICTS: Verdict[] = ["PASS", "WARN", "BLOCK"];
 const deterministicOnly = process.argv.includes("--deterministic-only");
+const CONCURRENCY = 4;
 
 function loadCases() {
   const raw = readFileSync(join(process.cwd(), "eval", "dataset.jsonl"), "utf8");
@@ -51,8 +59,23 @@ async function main() {
   const falseNegatives: string[] = [];
   const missedRules: string[] = [];
 
-  for (const c of cases) {
-    const result = await scoreAd(c.text, { deterministicOnly });
+  // Score in small parallel batches so a 19-case run against three model calls
+  // each does not take a coffee break.
+  const scored: { c: (typeof cases)[number]; result: Awaited<ReturnType<typeof scoreAd>> }[] = [];
+  for (let i = 0; i < cases.length; i += CONCURRENCY) {
+    const batch = cases.slice(i, i + CONCURRENCY);
+    const out = await Promise.all(
+      batch.map(async (c) => ({ c, result: await scoreAd(c.text, { deterministicOnly }) }))
+    );
+    scored.push(...out);
+  }
+
+  let totalDropped = 0;
+  const failedDims = new Set<string>();
+
+  for (const { c, result } of scored) {
+    totalDropped += result.meta.droppedFindings;
+    result.meta.dimensionsFailed.forEach((d) => failedDims.add(d));
     const key = `${c.expectedVerdict}>${result.verdict}`;
     matrix.set(key, (matrix.get(key) ?? 0) + 1);
 
@@ -88,8 +111,15 @@ async function main() {
     console.log(`  ${want.padEnd(5)} | ${row}`);
   }
 
-  const exact = cases.filter((c, i) => i >= 0).length - falsePositives.length - falseNegatives.length;
+  const exact = cases.length - falsePositives.length - falseNegatives.length;
   console.log(`\nExact verdict match: ${exact}/${cases.length}`);
+
+  if (!deterministicOnly) {
+    console.log(
+      `\nGuardrails: ${totalDropped} model finding(s) dropped for unverifiable spans` +
+        (failedDims.size ? `; FAILED dimensions: ${[...failedDims].join(", ")}` : "; no dimension failures")
+    );
+  }
 
   console.log(`\nFALSE POSITIVES (${falsePositives.length}) <- the metric that matters`);
   console.log(falsePositives.length ? falsePositives.join("\n") : "  none");
