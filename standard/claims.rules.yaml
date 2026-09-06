@@ -14,14 +14,18 @@ rules:
   - id: POLICY-001
     dimension: policy
     severity: BLOCK
-    title: Disease treatment or cure claims
+    title: Therapeutic or treatment claim on a cosmetic
     provenance: regulation
-    source: "TODO verify: Drugs and Magic Remedies (Objectionable Advertisements) Act 1954, schedule"
+    source: "Cosmetics Rules 2020, Rule 36 (secondary-sourced); CDSCO public notice 18 May 2026, File No. COS-1211/2026-eoffice (secondary-sourced). See standard/regulatory-sources.md sections 6 and 7."
     verified: false
     rationale: >
-      A cosmetic may not be advertised as treating or curing a condition.
-      Crossing that line reclassifies the product as a drug and is the clearest
-      legal exposure in the category.
+      A cosmetic may not be advertised as treating or curing a condition. The
+      mechanism is not that "cure" is a banned word: a therapeutic claim
+      reclassifies the product out of the cosmetic category and into drug
+      licensing, which the product does not hold.
+      CORRECTED. This rule previously cited the D&MR Act 1954 Schedule, which
+      does not list acne or any common skincare concern. See docs/CORRECTIONS.md
+      C-002. Awaiting human review of scope and severity before verification.
     matcher:
       type: lexicon
       terms: ["cures", "cure", "treats", "heals", "eliminates acne", "permanently removes"]
@@ -31,11 +35,16 @@ rules:
     severity: BLOCK
     title: Unsubstantiated superlative or ranking claim
     provenance: regulation
-    source: "TODO verify: ASCI Code chapter II, substantiation"
+    source: "ASCI Code Chapter I, clause 1.1 (primary, verbatim recorded); ASCI Guideline on Usage of Awards/Rankings, clauses 7 and 8 (primary). See standard/regulatory-sources.md sections 1 and 3."
     verified: false
     rationale: >
-      Superlatives and rankings are objective claims and require held evidence.
-      A best-in-India claim without a cited study is not defensible.
+      Superlatives and rankings relate to matters of objectively ascertainable
+      fact and must be capable of substantiation. A ranking claim additionally
+      requires published criteria and an undertaking of no commercial
+      relationship with the awarding body.
+      CORRECTED. This rule previously cited ASCI chapter II, which governs
+      offensiveness to public decency, not substantiation. See
+      docs/CORRECTIONS.md C-001. Awaiting human review before verification.
     matcher:
       type: regex
       pattern: "\\b(best|no\\.?\\s?1|number one|#1|most effective)\\b"
