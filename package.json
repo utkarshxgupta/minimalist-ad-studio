@@ -6,7 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "eval": "tsx scripts/eval.ts",
+    "redteam": "tsx scripts/redteam.ts"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",

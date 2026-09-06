@@ -1,0 +1,84 @@
+# Policy and claims rules.
+#
+# STATUS: seed set. Every regulation- and corpus-sourced rule below is
+# verified:false and therefore inert until a human checks it against actual
+# source text (see standard/SOURCES.md).
+#
+# Do not raise `verified` without reading the cited source. Rules invented by a
+# model and dressed up as statute are the worst possible failure for this
+# project, which exists to catch unsubstantiated claims.
+
+version: "0.1.0-seed"
+
+rules:
+  - id: POLICY-001
+    dimension: policy
+    severity: BLOCK
+    title: Disease treatment or cure claims
+    provenance: regulation
+    source: "TODO verify: Drugs and Magic Remedies (Objectionable Advertisements) Act 1954, schedule"
+    verified: false
+    rationale: >
+      A cosmetic may not be advertised as treating or curing a condition.
+      Crossing that line reclassifies the product as a drug and is the clearest
+      legal exposure in the category.
+    matcher:
+      type: lexicon
+      terms: ["cures", "cure", "treats", "heals", "eliminates acne", "permanently removes"]
+
+  - id: POLICY-002
+    dimension: policy
+    severity: BLOCK
+    title: Unsubstantiated superlative or ranking claim
+    provenance: regulation
+    source: "TODO verify: ASCI Code chapter II, substantiation"
+    verified: false
+    rationale: >
+      Superlatives and rankings are objective claims and require held evidence.
+      A best-in-India claim without a cited study is not defensible.
+    matcher:
+      type: regex
+      pattern: "\\b(best|no\\.?\\s?1|number one|#1|most effective)\\b"
+
+  - id: POLICY-003
+    dimension: policy
+    severity: BLOCK
+    title: Concentration not present in ProductFacts
+    provenance: inference
+    source: "Our rule. Follows from the brand printing active concentrations on pack."
+    verified: true
+    rationale: >
+      Minimalist prints active concentrations on the front of the pack. A stated
+      concentration that does not match the product page is a fabricated fact
+      about a real product, which is the worst thing this tool could ship.
+    guidance: >
+      Every percentage in the ad must appear identically in ProductFacts.actives.
+      Flag any percentage that does not, quoting it exactly as written.
+
+  - id: TONE-001
+    dimension: tone
+    severity: WARN
+    title: Fear-based framing
+    provenance: corpus
+    source: "TODO verify against corpus: beminimalist.co product pages and live ads"
+    verified: false
+    rationale: >
+      The brief states the brand deliberately avoids the fear-based marketing
+      common in the category. Needs corpus confirmation before it is treated as
+      a rule rather than a repetition of the brief.
+    guidance: >
+      Flag copy whose persuasive mechanism is anxiety about the reader's skin
+      rather than information about the product.
+
+  - id: LANG-001
+    dimension: language
+    severity: WARN
+    title: Concentration formatting
+    provenance: corpus
+    source: "TODO verify against corpus: how beminimalist.co actually formats these"
+    verified: false
+    rationale: >
+      Placeholder. The observed format must be extracted from real product
+      pages, not assumed. Do not encode a guess here.
+    guidance: >
+      Placeholder pending corpus extraction.
