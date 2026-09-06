@@ -156,11 +156,37 @@ async function generateAttacks(
   return parsed.data.attacks;
 }
 
+/**
+ * The product catalogue, supplied as ProductFacts on every scoring call.
+ *
+ * Round 1 of this loop reported two POLICY-005 "gaps" that were nothing of the
+ * kind: the harness scored with no facts, so the requires_facts gate correctly
+ * withheld the rule, and a rule that cannot run looks exactly like a rule that
+ * failed. A red team that does not give the defender its inputs measures the
+ * harness, not the defence.
+ *
+ * Concentrations below are from the corpus, not invented.
+ */
+const CATALOGUE = JSON.stringify({
+  products: [
+    { name: "Niacinamide 10% Face Serum", actives: [{ ingredient: "Niacinamide", concentration: "10%" }, { ingredient: "Matmarine", concentration: "1%" }] },
+    { name: "Salicylic Acid 2% Face Serum", actives: [{ ingredient: "Salicylic Acid", concentration: "2%" }] },
+    { name: "Vitamin C 10% Face Serum", actives: [{ ingredient: "Ethyl Ascorbic Acid", concentration: "10%" }, { ingredient: "Acetyl Glucosamine", concentration: "1%" }] },
+    { name: "Retinol 0.3% + Q10 Face Serum", actives: [{ ingredient: "Retinol", concentration: "0.3%" }, { ingredient: "Bakuchiol", concentration: "1%" }] },
+    { name: "Alpha Arbutin 2% Face Serum", actives: [{ ingredient: "Alpha Arbutin", concentration: "2%" }] },
+    { name: "Hyaluronic + PGA 2% Face Serum", actives: [{ ingredient: "Hyaluronic Acid + PGA", concentration: "2%" }] },
+    { name: "Multi-Vitamin SPF 50 Sunscreen", actives: [{ ingredient: "SPF", concentration: "50" }] },
+  ],
+});
+
+type Outcome = "blocked" | "downgraded" | "escaped";
+
 interface Attempt extends Attack {
   round: number;
   verdict: ScoreResult["verdict"];
   firedRules: string[];
-  survived: boolean;
+  targetFired: boolean;
+  outcome: Outcome;
 }
 
 async function main() {
@@ -187,26 +213,39 @@ async function main() {
       const batch = attacks.slice(i, i + 4);
       const scored = await Promise.all(
         batch.map(async (a) => {
-          const result = await scoreAd(a.ad);
-          // An attack survives if it was intended as a violation and the scorer
-          // did not block it. WARN counts as survival: a WARN is exportable
-          // with an override, so a real violation reaching WARN still ships.
-          return {
-            ...a,
-            round,
-            verdict: result.verdict,
-            firedRules: [...new Set(result.findings.map((f) => f.ruleId))],
-            survived: result.verdict !== "BLOCK",
-          } satisfies Attempt;
+          const result = await scoreAd(a.ad, { factsContext: CATALOGUE });
+          const firedRules = [...new Set(result.findings.map((f) => f.ruleId))];
+          const targetFired = firedRules.includes(a.targetRuleId);
+
+          // Three outcomes, not two. Round 1 scored "anything not BLOCK" as a
+          // survivor, which counted correct behaviour as failure: TONE rules and
+          // POLICY-006 are WARN by design, so an attack they catch at WARN is the
+          // system working, not the system losing.
+          //
+          //   blocked    - the target rule fired and the ad was stopped
+          //   downgraded - the target rule fired, but only to WARN, so the ad
+          //                still ships behind a logged override
+          //   escaped    - the target rule never fired. The only true miss.
+          const outcome: Outcome =
+            result.verdict === "BLOCK" ? "blocked" : targetFired ? "downgraded" : "escaped";
+
+          return { ...a, round, verdict: result.verdict, firedRules, targetFired, outcome };
         })
       );
       attempts.push(...scored);
     }
 
-    const survivors = attempts.filter((a) => a.survived);
-    console.log(`${survivors.length}/${attempts.length} survived`);
+    const escaped = attempts.filter((a) => a.outcome === "escaped");
+    const downgraded = attempts.filter((a) => a.outcome === "downgraded");
+    console.log(
+      `${escaped.length} escaped, ${downgraded.length} downgraded, ` +
+        `${attempts.length - escaped.length - downgraded.length} blocked`
+    );
     all.push(...attempts);
-    priorWins = survivors.map((s) => `${s.strategy}: "${s.ad}"`);
+    // Seed the next round only with what genuinely got through. Feeding back
+    // correctly-WARNed attacks would teach the attacker to repeat things that
+    // already work as intended.
+    priorWins = escaped.map((s) => `${s.strategy}: "${s.ad}"`);
   }
 
   mkdirSync(OUT_DIR, { recursive: true });
@@ -214,13 +253,20 @@ async function main() {
   const file = join(OUT_DIR, `${stamp}.jsonl`);
   writeFileSync(file, all.map((a) => JSON.stringify(a)).join("\n") + "\n", "utf8");
 
-  const survivors = all.filter((a) => a.survived);
+  const escaped = all.filter((a) => a.outcome === "escaped");
+  const downgraded = all.filter((a) => a.outcome === "downgraded");
+  const blocked = all.filter((a) => a.outcome === "blocked");
+
   console.log(`\n${"=".repeat(70)}`);
-  console.log(`SURVIVORS: ${survivors.length}/${all.length}  (lower is better)`);
+  console.log(`  blocked     ${blocked.length}/${all.length}   target rule fired, ad stopped`);
+  console.log(`  downgraded  ${downgraded.length}/${all.length}   target rule fired, ships behind an override`);
+  console.log(`  ESCAPED     ${escaped.length}/${all.length}   target rule never fired. The real miss rate.`);
   console.log(`${"=".repeat(70)}\n`);
 
-  for (const s of survivors) {
-    console.log(`[${s.verdict}] target ${s.targetRuleId}  strategy: ${s.strategy.slice(0, 60)}`);
+  for (const s of [...escaped, ...downgraded]) {
+    console.log(
+      `[${s.outcome.toUpperCase()} / ${s.verdict}] target ${s.targetRuleId}  ${s.strategy.slice(0, 55)}`
+    );
     console.log(`  ad:        "${s.ad}"`);
     console.log(`  intended:  ${s.intendedViolation}`);
     console.log(`  fired:     ${s.firedRules.length ? s.firedRules.join(", ") : "nothing"}`);

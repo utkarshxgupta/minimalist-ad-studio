@@ -143,6 +143,21 @@ rules:
       # non-word characters, so there is no boundary between them. The eval set
       # caught this as a silent false negative on seed-002.
       pattern: "(?:\\b(?:no\\.?\\s?1|number one|world'?s most|india'?s (?:best|no\\.?\\s?1|number one|most)|most effective|unmatched|unrivall?ed|asia'?s 1st|best (?:formula|serum|product|choice|cream|moisturi[sz]er|sunscreen))\\b|#\\s?1\\b)"
+    # The matcher handles "# 1" but not "N o . 1", which the red team used to
+    # walk a ranking claim through. Rather than chase every spacing permutation
+    # in a regex, the same lesson as POLICY-001 applies: characters can be
+    # separated in more ways than a pattern can enumerate, so generalisation
+    # goes to the model.
+    guidance: >
+      Flag ranking and superlative claims however they are written, including
+      when characters are spaced or punctuated to evade matching. "N o . 1",
+      "N-o-1", "Numero Uno" and "#1" are all ranking claims. Read what the copy
+      says when the obfuscation is removed.
+      A ranking claim needs published criteria and an undertaking of no
+      commercial relationship with the awarding body, so absent a named and
+      checkable source it is unsubstantiated.
+      Do NOT flag adverbial or ordinary uses: "best used at night", "first
+      apply", "one pump".
 
   - id: POLICY-005
     dimension: policy
