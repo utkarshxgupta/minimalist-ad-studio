@@ -26,10 +26,10 @@ both surfaces as consumers of that one artefact. `standard/` is the product.
 
 Two surfaces over one rulebook.
 
-**Generate.** A product URL in, a scored 1080x1080 creative out. The page is
-fetched server-side, parsed into `ProductFacts`, copy is generated against those
-facts and nothing else, a background is generated and scored, and the creative
-self-scores before it renders.
+**Generate.** A product URL in, scored creatives out across four placements in
+two channels. The page is fetched server-side, parsed into `ProductFacts`, copy
+is generated against those facts and nothing else, a background is generated and
+scored, and each creative self-scores before it renders.
 
 **Review.** Paste any ad. Every finding cites a rule ID, quotes the exact words
 it objects to, says why, and says what to do instead.
@@ -76,10 +76,39 @@ wrong rather than shown the rejected sentence.
 *Rejected:* the obvious demo, where the agent fixes its own violations and shows
 a green tick. It demos better and is worse.
 
+### Placements are formats, not sizes
+
+A Meta feed ad is scrolled past and keeps under 15 words on the canvas, moving
+the argument into the caption. An 11:16 PDP listing image is studied by a buyer
+already zoomed in and runs 40 to 90 words. Copy is written and scored per
+placement, never rescaled from one master.
+
+This is a compliance decision wearing design clothes, and it points against
+intuition. Substantiation costs words: "93% subjects saw significant reduction in
+active acne in 4 weeks" is eleven of the fifteen a feed ad gets. The short
+formats are therefore where evidence gets squeezed out, which makes them the most
+dangerous placements the brand owns, not the most trivial.
+
+*Rejected:* one creative rendered at four aspect ratios. It is the cheaper build
+and it silently truncates the evidence exactly where evidence is scarcest.
+
+### The disclaimer is part of the standard, and has to be legible
+
+A quantified claim must carry its substantiation footnote on the creative, and
+the footnote must sit with the claim it disclaims: on the canvas if the stat is
+on the canvas, at the end of the caption if the stat is in the caption. A
+disclaimer printed on an image whose claim lives in the caption satisfies nobody.
+
+The wording lives in `standard/disclosures.yaml` marked `secondary` and
+`verified: false`, because it appears on none of the scraped product pages and
+comes from an external audit this repo cannot verify. The requirement is sound
+regardless of the wording; a disclosure that misstates who ran the study is its
+own problem, so it is not quietly hardcoded.
+
 ### A BLOCK does not get a finished-looking creative
 
 The interface shows the copy as text with the flagged spans marked, and no
-artboard. A composed 1080x1080 carrying a warning is halfway to published:
+artboard. A composed creative carrying a warning is halfway to published:
 somebody screenshots it, somebody else asks why not, and the argument restarts.
 
 ### Two layers, and each finding says which one it came from
@@ -176,9 +205,15 @@ a regex, and to add the attack to the eval set as a regression row.
 The attacker and the scorer are the same model family, so their blind spots
 correlate. **This measures gameability, not safety.**
 
-**Corrections.** Five logged in `docs/CORRECTIONS.md`, including two regulatory
-citations that were confidently wrong before verification, and one rule that
-cited an internal document which did not exist. A tool that judges other people's
+**Corrections.** Six logged in `docs/CORRECTIONS.md`, including two regulatory
+citations that were confidently wrong before verification, one rule that cited an
+internal document which did not exist, and one substantiation claim filed against
+the wrong product. That last one is the instructive failure: POLICY-012 answers
+"is the cited study one of ours", so a misfiled entry does not fail loudly, it
+certifies an ad making a claim that product has never made. The rule verified ad
+copy against the registry and nothing verified the registry against reality.
+`npm run test:registry` now does, and the registry carries 19 entries each
+checked verbatim against a real product page. A tool that judges other people's
 claims should be able to show its own error rate.
 
 Twelve known weaknesses are written down in `docs/FAILURE-MODES.md`. The one
@@ -190,18 +225,22 @@ page overclaims, grounded generation reproduces the overclaim. A PASS means
 
 ## What I would do next, in order
 
-1. **Get 50 real ads from the brand's archive.** The tone and language rules were
+1. **Build the creative archetypes.** An external audit of the brand's asset
+   library identified ten recurring creative structures. This repo has three
+   layout families. That is the largest single gap between what it produces and
+   what the brand actually ships.
+2. **Get 50 real ads from the brand's archive.** The tone and language rules were
    derived from product pages because ad copy could not be obtained. Those are
    different registers, and a rulebook built on the wrong one is systematically
    lenient about the exact failure it exists to catch.
-2. **Close the grounding gap in the standard.** Invariant 4 is enforced by rule
+3. **Close the grounding gap in the standard.** Invariant 4 is enforced by rule
    only for concentrations. A benefit claim absent from `ProductFacts` is
    currently a generation warning, not a finding. That rule should exist, and
    adding it needs the eval run either side.
-3. **Give the registry an owner.** `standard/claims-registry.yaml` is populated
+4. **Give the registry an owner.** `standard/claims-registry.yaml` is populated
    from what product pages state, not from study reports. Until whoever holds the
    studies owns it, POLICY-012 will produce false positives on real claims.
-4. **Image input on the review surface.** Real ads are pictures, and the tool
+5. **Image input on the review surface.** Real ads are pictures, and the tool
    currently reads text.
-5. **An independent red team.** A different model family, so the blind spots stop
+6. **An independent red team.** A different model family, so the blind spots stop
    correlating.
