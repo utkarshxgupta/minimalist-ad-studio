@@ -47,10 +47,24 @@ check("niacinamide page: every field reads, no warnings", () => {
   eq(warnings, [], "warnings");
 });
 
+check("trust badges are read from the pill carousel, not from rawText", () => {
+  // Regression: this section rendered as a pill carousel, not prose, so it
+  // was invisible to the toggle-tab reader for a full session before anyone
+  // looked for it. Real facts a marketer would reasonably expect the tool to
+  // surface: the brand states these on every product page.
+  const { facts } = extractFacts(loadFixture("niacinamide-10-with-matmarine"));
+  eq(
+    facts.trustBadges,
+    ["Fragrance Free", "Non-comedogenic", "Essential Oil Free", "pH: 5.5 - 6.5"],
+    "trust badges"
+  );
+});
+
 check("salicylic page: a different product shape reads the same way", () => {
   const { facts } = extractFacts(loadFixture("salicylic-acid-2"));
   eq(facts.name, "Salicylic Acid 2% Face Serum", "product name");
   eq(facts.actives[0], { ingredient: "Salicylic Acid", concentration: "2%" }, "first active");
+  eq(facts.trustBadges[3], "pH: 3.2 - 4.0", "this product's own pH range, not another's");
 });
 
 check("page text stops at the product region", () => {

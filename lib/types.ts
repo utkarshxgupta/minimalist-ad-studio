@@ -105,6 +105,14 @@ export const ProductFacts = z.object({
   name: z.string(),
   actives: z.array(z.object({ ingredient: z.string(), concentration: z.string() })),
   statedBenefits: z.array(z.string()),
+  /**
+   * Formulation trust badges: "Fragrance Free", "Non-comedogenic", a pH
+   * range. Rendered on the real page as a pill carousel, not as prose, which
+   * is why the parser missed it for a full session before this was found and
+   * fixed: nothing in rawText's toggle-tab reader ever looked there. Real
+   * facts a marketer would reasonably expect the tool to know about.
+   */
+  trustBadges: z.array(z.string()).default([]),
   heroImageUrl: z.string().optional(),
   rawText: z.string(),
 });

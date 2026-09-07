@@ -47,6 +47,10 @@ export function factsBlock(facts: ProductFacts): string {
     ? facts.statedBenefits.map((b) => `- ${b}`).join("\n")
     : "- (none could be read from the page)";
 
+  const badges = facts.trustBadges.length
+    ? facts.trustBadges.map((b) => `- ${b}`).join("\n")
+    : "- (none stated on the page)";
+
   return `Product name: ${facts.name}
 Source: ${facts.url}
 
@@ -55,6 +59,9 @@ ${actives}
 
 Benefits stated on the product page:
 ${benefits}
+
+Formulation trust badges stated on the product page:
+${badges}
 
 Full page copy:
 ${facts.rawText}`;
@@ -150,6 +157,12 @@ product facts block above, not a rephrasing of the headline. Each item is
 checked the same way a claim is: it must be traceable to the facts, so add a
 claimTrace entry for each checklist item exactly as you would for a claim in
 the body copy.
+
+The formulation trust badges above ("Fragrance Free", "Non-comedogenic", a pH
+range) are good checklist material and are exactly the kind of line the real
+site's own checklists use ("For every skin type and concern", "Recommended by
+dermatologists"). Prefer them over a paraphrase of the headline when you need
+a third item and the benefits list is thin.
 
 "statBadge": a single number-and-label pair for a bordered badge, the kind
 that reads "150k+ Positive Reviews" on the real site. Use it ONLY if one of

@@ -89,17 +89,44 @@ export function extractFacts(bundle: PageBundle): ExtractionResult {
     warnings.push("No active and concentration could be read. Concentration claims will be blocked.");
   }
 
+  const trustBadges = extractTrustBadges($);
+
   return {
     facts: {
       url: bundle.url,
       name,
       actives,
       statedBenefits,
+      trustBadges,
       heroImageUrl,
       rawText: buildRawText(name, subtitle, sections),
     },
     warnings,
   };
+}
+
+/**
+ * Fragrance Free, Non-comedogenic, a pH range: rendered as a pill carousel on
+ * the real page, not as prose. Verified across all eight corpus products with
+ * a live fetch: the class is used only for this carousel on every one of
+ * them, never reused for a size selector or an unrelated badge. Kept as a
+ * flat allowlist-free extraction (whatever the page ships) rather than a
+ * fixed vocabulary, because the badge set genuinely differs by product: the
+ * sunscreen ships "White cast free" instead of "Essential Oil Free", the
+ * retinol serum ships no pH badge at all.
+ */
+export function extractTrustBadges($: cheerio.CheerioAPI): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+
+  $(".pill__label").each((_, el) => {
+    const label = $(el).text().replace(/\s+/g, " ").trim();
+    if (!label || seen.has(label.toLowerCase())) return;
+    seen.add(label.toLowerCase());
+    out.push(label);
+  });
+
+  return out;
 }
 
 function clean(s: string): string {

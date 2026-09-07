@@ -31,6 +31,7 @@ const FACTS: ProductFacts = {
   name: "Salicylic Acid 2% Face Serum",
   actives: [{ ingredient: "Salicylic Acid", concentration: "2%" }],
   statedBenefits: ["Reduces Acne, Blackheads & Excessive Oil"],
+  trustBadges: ["Fragrance Free", "Non-comedogenic", "pH: 3.2 - 4.0"],
   heroImageUrl: "https://cdn.shopify.com/x.png",
   rawText: "Salicylic Acid 2% Face Serum\nReduces Acne, Blackheads & Excessive Oil",
 };
