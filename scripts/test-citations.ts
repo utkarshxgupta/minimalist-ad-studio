@@ -16,11 +16,10 @@ import { check, ok, report } from "./assert";
 /**
  * Files that make citations a reader is expected to be able to follow.
  *
- * docs/DESIGN.md and docs/RULE-PROPOSALS.md are deliberately absent. They are
- * working records and they name planned artefacts before those exist, which is
- * a legitimate thing for a design note to do and an illegitimate thing for a
- * rule to do. As of writing, the one such forward reference is
- * docs/DECISIONS.md, the decision doc that is written last.
+ * This started narrower. docs/DESIGN.md was excluded because it named
+ * docs/DECISIONS.md before that file existed, which is a legitimate thing for a
+ * design note to do and an illegitimate thing for a rule to do. The decision doc
+ * is now written, so the carve-out has no justification left and is gone.
  */
 const SOURCES = [
   "README.md",
@@ -31,6 +30,9 @@ const SOURCES = [
   "standard/regulatory-sources.md",
   "docs/CORRECTIONS.md",
   "docs/FAILURE-MODES.md",
+  "docs/DECISIONS.md",
+  "docs/DESIGN.md",
+  "docs/RULE-PROPOSALS.md",
 ];
 
 /**

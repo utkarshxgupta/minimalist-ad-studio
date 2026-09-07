@@ -117,7 +117,7 @@ have no span to verify and a reviewer should weight them differently.
 | `npm run eval` | Score the labelled set, print confusion matrix and per-rule breakdown |
 | `npm run redteam` | Adversarial round: generate attack ads, score, log survivors |
 | `npm run generate -- <url>` | The generator, headless. `--angle`, `--background generated`, `--out bg.jpg` |
-| `npm test` | Extraction and gate tests. Offline, no API key |
+| `npm test` | Extraction, gate and citation checks. Offline, no API key |
 | `npm run snapshot` | Refresh the committed product snapshots |
 
 ## Layout
@@ -130,11 +130,16 @@ standard/          the product: rules, sources, substantiation registry
 lib/scorer/        two-layer scorer, prompts assembled from standard/
 lib/generator/     fetch, extract, copy, background, gate
 eval/dataset.jsonl 29 labelled ads, including hard negatives
-docs/              design record, corrections log
+docs/              decisions, failure modes, design record, corrections
 fixtures/          committed product snapshots and parser fixtures
 ```
 
-## Reading the history
+## The written record
+
+[`docs/DECISIONS.md`](docs/DECISIONS.md) is the one-page argument: what was
+decided, what was rejected, and what the evidence is worth.
+[`docs/FAILURE-MODES.md`](docs/FAILURE-MODES.md) is where this system is weak,
+stated plainly.
 
 Commits are the working record and are not squashed.
 [`docs/CORRECTIONS.md`](docs/CORRECTIONS.md) logs where this agent was wrong and
