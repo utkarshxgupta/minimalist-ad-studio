@@ -61,7 +61,14 @@ export const Finding = z.object({
   dimension: Dimension,
   severity: Severity,
   layer: Layer,
-  /** Exact substring of the input. Verified to exist verbatim or the finding is dropped. */
+  /**
+   * What the finding is about. Image findings come from scoring a generated
+   * background, which has no text to quote, so they carry a description in
+   * `span` instead of a substring and never pass through span verification.
+   * Tagged rather than blended so a reviewer knows which kind they are reading.
+   */
+  target: z.enum(["text", "image"]).default("text"),
+  /** Exact substring of the input, for text findings. Verified verbatim or dropped. */
   span: z.string(),
   start: z.number().optional(),
   end: z.number().optional(),
@@ -102,6 +109,30 @@ export const ProductFacts = z.object({
   rawText: z.string(),
 });
 export type ProductFacts = z.infer<typeof ProductFacts>;
+
+/**
+ * A generated claim and the ProductFacts text that supports it.
+ *
+ * The trace is verified in code: `supportedBy` must appear verbatim in the
+ * facts, and `claim` must appear verbatim in the ad. It is the generation-side
+ * analogue of span verification in the scorer.
+ */
+export const ClaimTrace = z.object({
+  /** The phrase in the ad copy that makes a claim. */
+  claim: z.string(),
+  /** Verbatim text from ProductFacts that supports it. */
+  supportedBy: z.string(),
+});
+export type ClaimTrace = z.infer<typeof ClaimTrace>;
+
+export const AdCopy = z.object({
+  headline: z.string(),
+  subhead: z.string(),
+  body: z.string(),
+  cta: z.string(),
+  claimTrace: z.array(ClaimTrace),
+});
+export type AdCopy = z.infer<typeof AdCopy>;
 
 export const EvalCase = z.object({
   id: z.string(),

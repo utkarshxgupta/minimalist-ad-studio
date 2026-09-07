@@ -10,7 +10,10 @@
     "eval": "tsx scripts/eval.ts",
     "redteam": "tsx scripts/redteam.ts",
     "snapshot": "tsx scripts/snapshot.ts",
-    "test:extract": "tsx scripts/test-extract.ts"
+    "test:extract": "tsx scripts/test-extract.ts",
+    "generate": "tsx scripts/generate.ts",
+    "test:gate": "tsx scripts/test-gate.ts",
+    "test": "npm run test:extract && npm run test:gate"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",

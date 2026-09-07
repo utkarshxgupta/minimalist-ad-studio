@@ -15,30 +15,9 @@
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { check, eq, ok, report } from "./assert";
 import { extractActives, extractFacts, type Section } from "../lib/generator/extract";
 import { parseProductUrl, FetchError, type PageBundle } from "../lib/generator/fetch";
-
-let passed = 0;
-const failures: string[] = [];
-
-function check(name: string, fn: () => void) {
-  try {
-    fn();
-    passed++;
-  } catch (err) {
-    failures.push(`${name}\n    ${err instanceof Error ? err.message : String(err)}`);
-  }
-}
-
-function eq<T>(actual: T, expected: T, what: string) {
-  const a = JSON.stringify(actual);
-  const e = JSON.stringify(expected);
-  if (a !== e) throw new Error(`${what}\n    expected ${e}\n    actual   ${a}`);
-}
-
-function ok(cond: boolean, what: string) {
-  if (!cond) throw new Error(what);
-}
 
 function loadFixture(handle: string): PageBundle {
   const dir = join(process.cwd(), "fixtures", "pages");
@@ -170,8 +149,4 @@ check("a non-product page is refused", () => {
   ok(threw, "collections page should be refused");
 });
 
-// --- Report ----------------------------------------------------------------
-
-console.log(`\n  ${passed} passed, ${failures.length} failed\n`);
-for (const f of failures) console.error(`  FAIL  ${f}\n`);
-process.exit(failures.length === 0 ? 0 : 1);
+report();

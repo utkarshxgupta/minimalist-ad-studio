@@ -31,6 +31,7 @@ export function scoreDeterministic(text: string, rules?: Rule[]): Finding[] {
           dimension: rule.dimension,
           severity: rule.severity,
           layer: "deterministic",
+          target: "text",
           span: m[0],
           start: m.index,
           end: m.index + m[0].length,

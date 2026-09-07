@@ -111,6 +111,7 @@ async function scoreDimension(
           dimension: rule.dimension,
           severity: rule.severity, // from the rulebook, never from the model
           layer: "model",
+          target: "text",
           span: f.span,
           explanation: f.explanation,
           suggestedFix: f.suggestedFix,
