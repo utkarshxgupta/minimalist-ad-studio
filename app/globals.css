@@ -1,26 +1,65 @@
 @import "tailwindcss";
 
+/*
+ * The palette is the brand's: warm paper, near-black ink, one accent per
+ * severity and no others. Severity colour is functional here, not decorative,
+ * so nothing else in the interface is allowed to use red, amber or green.
+ *
+ * Light only. A reviewer judging whether a cream product photograph sits well
+ * on a warm background should not be doing it against two different surfaces.
+ */
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #f7f5f1;
+  --card: #ffffff;
+  --ink: #16130f;
+  --muted: #6b6459;
+  --line: #e4ded4;
+  --block: #a32b1f;
+  --warn: #9a6a0b;
+  --pass: #2f6b4f;
 }
 
 @theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
+  --color-paper: var(--paper);
+  --color-card: var(--card);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-block: var(--block);
+  --color-warn: var(--warn);
+  --color-pass: var(--pass);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html {
+  color-scheme: light;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-geist-sans), system-ui, sans-serif;
+}
+
+.label {
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.field {
+  width: 100%;
+  border: 1px solid var(--line);
+  background: var(--card);
+  border-radius: 0.25rem;
+  padding: 0.5rem 0.625rem;
+  font-size: 0.875rem;
+}
+
+.field:focus {
+  outline: 2px solid var(--ink);
+  outline-offset: -1px;
 }

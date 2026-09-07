@@ -14,18 +14,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { fetchProductPage } from "../lib/generator/fetch";
 import { extractFacts } from "../lib/generator/extract";
-
-/** The eight products the rulebook corpus was derived from. */
-export const KNOWN_HANDLES = [
-  "niacinamide-10-with-matmarine",
-  "salicylic-acid-2",
-  "alpha-arbutin-2",
-  "2-hyaluronic-acid",
-  "vitamin-c-ethyl-ascorbic-acid-10-acetyl-glucosamine-1",
-  "retinol-0-3-q10",
-  "vitamin-b5-10-moisturizer",
-  "multi-vitamin-spf-50",
-];
+import { CATALOGUE, productUrl } from "../lib/generator/catalogue";
 
 /** Products whose full HTML is committed so the parser can be tested offline. */
 const PAGE_FIXTURES = ["niacinamide-10-with-matmarine", "salicylic-acid-2"];
@@ -52,8 +41,8 @@ async function main() {
   mkdirSync(FACTS_DIR, { recursive: true });
   if (alsoPages) mkdirSync(PAGES_DIR, { recursive: true });
 
-  for (const handle of KNOWN_HANDLES) {
-    const url = `https://beminimalist.co/products/${handle}`;
+  for (const { handle } of CATALOGUE) {
+    const url = productUrl(handle);
     try {
       const bundle = await fetchProductPage(url);
       const { facts, warnings } = extractFacts(bundle);
