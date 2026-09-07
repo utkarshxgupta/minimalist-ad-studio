@@ -180,6 +180,18 @@ check("a trace entry for a claim not in the ad is caught", () => {
   eq(verifyClaimTrace(FACTS, copy).length, 1, "claim absent from the copy");
 });
 
+check("a claim traced to the facts block as the prompt renders it verifies", () => {
+  // Regression: the prompt lists actives as "Vitamin C: 10%" and the verifier
+  // held only "Vitamin C 10%" / "10% Vitamin C". A model quoting the block
+  // character for character, which is what it is told to do, was marked
+  // ungrounded and pushed two clean ads into an override.
+  const copy = copyWith(
+    [{ claim: "Salicylic Acid 2%", supportedBy: "Salicylic Acid: 2%" }],
+    "Salicylic Acid 2% clears pores"
+  );
+  eq(verifyClaimTrace(FACTS, copy), [], "colon form from the prompt should verify");
+});
+
 check("grounding is not defeated by punctuation or case", () => {
   const copy = copyWith([{ claim: "reduces acne", supportedBy: "reduces  acne, blackheads & excessive oil" }]);
   eq(verifyClaimTrace(FACTS, copy), [], "whitespace and case are normalised");

@@ -1,6 +1,6 @@
 import { GoogleGenAI } from "@google/genai";
 import { AdCopy, type ClaimTrace, type ProductFacts } from "@/lib/types";
-import { buildCopyPrompt, COPY_SCHEMA, type Brief } from "./prompt";
+import { buildCopyPrompt, factsBlock, COPY_SCHEMA, type Brief } from "./prompt";
 import { canvasWordCount, fieldsFor, type CopyField, type Placement } from "./placements";
 
 /**
@@ -128,11 +128,18 @@ function normalise(s: string): string {
  * evidence it points at stays in the English product facts.
  */
 export function verifyClaimTrace(facts: ProductFacts, copy: AdCopy): ClaimTrace[] {
+  // The haystack is the exact block the model was shown, not a second rendering
+  // of the same facts. Those diverged once: the prompt lists an active as
+  // "Vitamin C: 10%" while the verifier held only "Vitamin C 10%" and "10%
+  // Vitamin C", so a model quoting the facts block character for character,
+  // which is precisely what it is told to do, had its trace rejected. Two clean
+  // ads were pushed into an override by a disagreement between our own files.
+  //
+  // Building it from factsBlock makes prompt and verifier agree by construction.
+  // The extra orderings stay, because ad copy legitimately inverts them.
   const haystack = normalise(
     [
-      facts.name,
-      facts.rawText,
-      ...facts.statedBenefits,
+      factsBlock(facts),
       ...facts.actives.flatMap((a) => [
         `${a.ingredient} ${a.concentration}`,
         `${a.concentration} ${a.ingredient}`,
