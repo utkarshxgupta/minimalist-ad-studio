@@ -57,6 +57,15 @@ export interface Placement {
   hasCaption: boolean;
   /** Layout family the artboard renders. */
   layout: "split" | "stacked" | "tall";
+  /**
+   * Aspect ratio requested from the image model for this placement's backdrop.
+   *
+   * Not always the placement's own ratio: 11:16 is not a ratio image models
+   * offer, so the PDP format asks for the nearest supported one and the
+   * artboard covers. Generating one square backdrop and stretching it across a
+   * Story is the version of this that looks obviously wrong.
+   */
+  imageAspect: "1:1" | "4:5" | "9:16" | "3:4";
 }
 
 export const PLACEMENTS: Record<PlacementId, Placement> = {
@@ -70,6 +79,7 @@ export const PLACEMENTS: Record<PlacementId, Placement> = {
     canvasWordLimit: 15,
     hasCaption: true,
     layout: "stacked",
+    imageAspect: "4:5",
   },
   meta_square_1x1: {
     id: "meta_square_1x1",
@@ -81,6 +91,7 @@ export const PLACEMENTS: Record<PlacementId, Placement> = {
     canvasWordLimit: 15,
     hasCaption: true,
     layout: "split",
+    imageAspect: "1:1",
   },
   meta_story_9x16: {
     id: "meta_story_9x16",
@@ -92,6 +103,7 @@ export const PLACEMENTS: Record<PlacementId, Placement> = {
     canvasWordLimit: 12,
     hasCaption: true,
     layout: "tall",
+    imageAspect: "9:16",
   },
   pdp_listing_11x16: {
     id: "pdp_listing_11x16",
@@ -105,6 +117,7 @@ export const PLACEMENTS: Record<PlacementId, Placement> = {
     canvasWordLimit: 90,
     hasCaption: false,
     layout: "stacked",
+    imageAspect: "3:4",
   },
 };
 

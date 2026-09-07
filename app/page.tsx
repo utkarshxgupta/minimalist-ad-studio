@@ -2,34 +2,42 @@
 
 import { useRef, useState } from "react";
 import { toPng } from "html-to-image";
-import { Artboard, SIZE } from "@/components/Artboard";
+import { Artboard } from "@/components/Artboard";
 import { FindingList, HighlightedCopy } from "@/components/Findings";
 import { ScorePanel, VerdictBadge } from "@/components/Verdict";
 import { CATALOGUE, productUrl } from "@/lib/generator/catalogue";
-import type { GenerationRun } from "@/lib/generator";
+import { DEFAULT_PLACEMENT, PLACEMENT_LIST, type PlacementId } from "@/lib/generator/placements";
+import type { GenerationRun, PlacementRun } from "@/lib/generator";
 import { decide } from "@/lib/generator/gate";
 import { logOverride, readOverrides, type OverrideEntry } from "@/lib/overrides";
 
-function adText(copy: { headline: string; subhead: string; body: string; cta: string }): string {
-  return [copy.headline, copy.subhead, copy.body, copy.cta].filter(Boolean).join("\n");
+function adText(copy: { headline: string; subhead: string; body: string; cta: string; footnote: string; caption: string }): string {
+  return [copy.headline, copy.subhead, copy.body, copy.cta, copy.footnote, copy.caption].filter(Boolean).join("\n");
 }
 
 export default function GeneratePage() {
   const [url, setUrl] = useState(productUrl(CATALOGUE[1].handle));
   const [angle, setAngle] = useState("");
   const [audience, setAudience] = useState("");
+  const [placements, setPlacements] = useState<PlacementId[]>([DEFAULT_PLACEMENT]);
   const [backgroundMode, setBackgroundMode] = useState<"generated" | "plain">("generated");
   const [hint, setHint] = useState("");
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [run, setRun] = useState<GenerationRun | null>(null);
+  const [active, setActive] = useState(0);
   const [shown, setShown] = useState(0);
-
   const [reason, setReason] = useState("");
   const [overrides, setOverrides] = useState<OverrideEntry[]>([]);
 
   const board = useRef<HTMLDivElement>(null);
+
+  function togglePlacement(id: PlacementId) {
+    setPlacements((prev) =>
+      prev.includes(id) ? (prev.length === 1 ? prev : prev.filter((p) => p !== id)) : [...prev, id]
+    );
+  }
 
   async function generate() {
     setBusy(true);
@@ -40,12 +48,14 @@ export default function GeneratePage() {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url, angle, audience, background: backgroundMode, backgroundHint: hint }),
+        body: JSON.stringify({ url, angle, audience, placements, background: backgroundMode, backgroundHint: hint }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
-      setRun(data as GenerationRun);
-      setShown((data as GenerationRun).chosen);
+      const next = data as GenerationRun;
+      setRun(next);
+      setActive(0);
+      setShown(next.placements[0]?.chosen ?? 0);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -53,14 +63,26 @@ export default function GeneratePage() {
     }
   }
 
+  const current: PlacementRun | undefined = run?.placements[active];
+  const attempt = current?.attempts[shown];
+  const background = current?.background
+    ? `data:${current.background.mimeType};base64,${current.background.data}`
+    : undefined;
+
+  // Recomputed for the attempt actually on screen, not taken from the run. The
+  // marketer can page back to an earlier attempt, and a gate that describes a
+  // different creative than the one being looked at is worse than no gate.
+  const decision = attempt ? decide(attempt) : null;
+  const canExport =
+    decision?.export === "free" || (decision?.export === "override" && reason.trim().length >= 12);
+
   async function exportPng() {
-    if (!board.current || !run) return;
-    const attempt = run.attempts[shown];
+    if (!board.current || !run || !current || !attempt) return;
 
     if (decision?.export === "override") {
       logOverride({
         at: new Date().toISOString(),
-        product: run.facts.name,
+        product: `${run.facts.name} (${current.placement.label})`,
         verdict: attempt.score.verdict,
         rules: attempt.score.findings.map((f) => f.ruleId),
         reason,
@@ -69,32 +91,26 @@ export default function GeneratePage() {
       setOverrides(readOverrides());
     }
 
-    const png = await toPng(board.current, { width: SIZE, height: SIZE, pixelRatio: 1, cacheBust: true });
+    const png = await toPng(board.current, {
+      width: current.placement.width,
+      height: current.placement.height,
+      pixelRatio: 1,
+      cacheBust: true,
+    });
     const a = document.createElement("a");
     a.href = png;
-    a.download = `${run.facts.name.replace(/\W+/g, "-").toLowerCase()}-1080.png`;
+    a.download = `${run.facts.name.replace(/\W+/g, "-").toLowerCase()}-${current.placement.id}.png`;
     a.click();
   }
 
-  const attempt = run?.attempts[shown];
-  const background = run?.background ? `data:${run.background.mimeType};base64,${run.background.data}` : undefined;
-
-  // Recomputed for the attempt actually on screen, not taken from the run. The
-  // marketer can page back to an earlier attempt, and a gate that describes a
-  // different creative than the one being looked at is worse than no gate.
-  // Same pure function the server ran, so the two cannot drift.
-  const decision = attempt ? decide(attempt) : null;
-  const canExport =
-    decision?.export === "free" || (decision?.export === "override" && reason.trim().length >= 12);
-
   return (
-    <div className="mx-auto grid max-w-[1400px] gap-8 px-6 py-8 lg:grid-cols-[380px_1fr]">
+    <div className="mx-auto grid max-w-[1500px] gap-8 px-6 py-8 lg:grid-cols-[360px_1fr]">
       <section className="space-y-4">
         <div>
           <h1 className="text-lg font-semibold tracking-tight">Generate</h1>
           <p className="mt-1 text-sm text-muted">
-            A product URL in, a scored creative out. Every claim traces to the product page, and the
-            creative is scored against the same rulebook the review surface applies.
+            A product URL in, scored creatives out. Every claim traces to the product page, and each
+            placement is written and scored on its own rather than rescaled from one master.
           </p>
         </div>
 
@@ -115,6 +131,34 @@ export default function GeneratePage() {
             ))}
           </div>
         </div>
+
+        <fieldset className="border border-line bg-card p-3">
+          <legend className="label px-1">Placements</legend>
+          <div className="space-y-1.5">
+            {PLACEMENT_LIST.map((p) => (
+              <label key={p.id} className="flex items-start gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={placements.includes(p.id)}
+                  onChange={() => togglePlacement(p.id)}
+                />
+                <span>
+                  {p.label}
+                  <span className="block font-mono text-[10px] text-muted">
+                    {p.width}x{p.height} · {p.channel} · under {p.canvasWordLimit} words on canvas
+                    {p.hasCaption ? " + caption" : ""}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+          <p className="mt-2 text-xs text-muted">
+            A feed ad is scrolled past and a listing image is studied, so they get different copy, not
+            the same copy at a different size. Substantiation takes words, which makes the short
+            formats the ones where evidence gets squeezed out.
+          </p>
+        </fieldset>
 
         <div className="grid gap-3">
           <div>
@@ -148,11 +192,7 @@ export default function GeneratePage() {
           <div className="flex gap-4 text-sm">
             {(["generated", "plain"] as const).map((mode) => (
               <label key={mode} className="flex items-center gap-1.5">
-                <input
-                  type="radio"
-                  checked={backgroundMode === mode}
-                  onChange={() => setBackgroundMode(mode)}
-                />
+                <input type="radio" checked={backgroundMode === mode} onChange={() => setBackgroundMode(mode)} />
                 {mode}
               </label>
             ))}
@@ -166,8 +206,9 @@ export default function GeneratePage() {
                 onChange={(e) => setHint(e.target.value)}
               />
               <p className="mt-2 text-xs text-muted">
-                The product photograph is never generated. Only the environment behind it is, and the
-                result is scored: a backdrop of dewy glowing skin is an efficacy claim made in pixels.
+                The product photograph is never generated. Only the environment behind it is, at each
+                placement&apos;s own aspect ratio, and the result is scored: a backdrop of dewy glowing
+                skin is an efficacy claim made in pixels.
               </p>
             </>
           )}
@@ -178,7 +219,7 @@ export default function GeneratePage() {
           disabled={busy}
           className="w-full bg-ink px-4 py-2.5 text-sm font-medium text-paper disabled:opacity-50"
         >
-          {busy ? "Generating and scoring..." : "Generate"}
+          {busy ? `Generating ${placements.length} placement${placements.length === 1 ? "" : "s"}...` : "Generate"}
         </button>
 
         {error && <p className="border-l-2 border-block pl-3 text-sm text-block">{error}</p>}
@@ -222,12 +263,41 @@ export default function GeneratePage() {
           </div>
         )}
 
-        {run && attempt && (
+        {run && current && attempt && (
           <>
-            <div className="grid gap-6 xl:grid-cols-[540px_1fr]">
+            <div className="flex flex-wrap items-center gap-2">
+              {run.placements.map((p, i) => (
+                <button
+                  key={p.placement.id}
+                  onClick={() => {
+                    setActive(i);
+                    setShown(p.chosen);
+                    setReason("");
+                  }}
+                  className={`flex items-center gap-2 border px-2.5 py-1.5 text-xs ${
+                    i === active ? "border-ink bg-card" : "border-line"
+                  }`}
+                >
+                  {p.placement.label}
+                  <VerdictBadge verdict={p.attempts[p.chosen].score.verdict} size="sm" />
+                </button>
+              ))}
+              <span className="ml-auto font-mono text-[11px] text-muted">
+                {run.summary.free} clean · {run.summary.override} need an override · {run.summary.blocked} blocked
+              </span>
+            </div>
+
+            <div className="grid gap-6 xl:grid-cols-[420px_1fr]">
               <div>
                 {decision?.render ? (
-                  <Artboard ref={board} copy={attempt.copy} facts={run.facts} background={background} />
+                  <Artboard
+                    ref={board}
+                    copy={attempt.copy}
+                    facts={run.facts}
+                    placement={current.placement}
+                    background={background}
+                    previewWidth={380}
+                  />
                 ) : (
                   <BlockedPanel attempt={attempt} />
                 )}
@@ -256,16 +326,23 @@ export default function GeneratePage() {
                     onChange={(e) => setReason(e.target.value)}
                   />
                 )}
+
+                {attempt.copy.caption && (
+                  <div className="mt-4 border border-line bg-card p-3">
+                    <div className="label">Post caption, not on the image</div>
+                    <p className="mt-1 whitespace-pre-wrap text-sm">{attempt.copy.caption}</p>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-4">
                 <ScorePanel score={attempt.score} />
 
-                {run.attempts.length > 1 && (
+                {current.attempts.length > 1 && (
                   <div>
                     <div className="label">Attempts</div>
                     <div className="mt-1 flex gap-2">
-                      {run.attempts.map((a, i) => (
+                      {current.attempts.map((a, i) => (
                         <button
                           key={i}
                           onClick={() => setShown(i)}
@@ -275,14 +352,13 @@ export default function GeneratePage() {
                         >
                           {i + 1}
                           <VerdictBadge verdict={a.score.verdict} size="sm" />
-                          {i === run.chosen && <span className="text-[10px] text-muted">shown</span>}
+                          {i === current.chosen && <span className="text-[10px] text-muted">shown</span>}
                         </button>
                       ))}
                     </div>
                     <p className="mt-1.5 text-xs text-muted">
                       WARN findings are looped, capped at two retries. A retry is told what was wrong,
-                      never shown the rejected sentence: handing a model its own rejected line invites a
-                      reword of the same claim. BLOCK findings are never looped at all.
+                      never shown the rejected sentence. BLOCK findings are never looped at all.
                     </p>
                   </div>
                 )}
@@ -309,16 +385,27 @@ export default function GeneratePage() {
                   </div>
                 )}
 
-                {run.backgroundError && (
-                  <p className="text-xs text-warn">Background generation failed: {run.backgroundError}</p>
+                {attempt.overLength.length > 0 && (
+                  <div>
+                    <div className="label">Layout notes</div>
+                    <ul className="mt-1 space-y-0.5 text-xs text-muted">
+                      {attempt.overLength.map((o, i) => (
+                        <li key={i}>{o}</li>
+                      ))}
+                    </ul>
+                  </div>
                 )}
-                {run.background && run.background.hint.rejected.length > 0 && (
+
+                {current.backgroundError && (
+                  <p className="text-xs text-warn">Background generation failed: {current.backgroundError}</p>
+                )}
+                {current.background && current.background.hint.rejected.length > 0 && (
                   <div>
                     <div className="label">Background hint, rejected terms</div>
                     <ul className="mt-1 space-y-0.5 text-xs text-muted">
-                      {run.background.hint.rejected.map((r, i) => (
+                      {current.background.hint.rejected.map((r, i) => (
                         <li key={i}>
-                          <span className="font-mono">{r.phrase}</span> — {r.why}
+                          <span className="font-mono">{r.phrase}</span> {r.why}
                         </li>
                       ))}
                     </ul>
@@ -336,14 +423,14 @@ export default function GeneratePage() {
 }
 
 /**
- * A BLOCK does not get a finished-looking creative. A composed 1080x1080 that
+ * A BLOCK does not get a finished-looking creative. A composed artboard that
  * merely carries a warning is halfway to published: somebody screenshots it,
  * somebody else asks why not, and the argument the standard was written to end
  * starts again.
  */
-function BlockedPanel({ attempt }: { attempt: GenerationRun["attempts"][number] }) {
+function BlockedPanel({ attempt }: { attempt: PlacementRun["attempts"][number] }) {
   return (
-    <div className="border border-block/40 bg-block/5 p-5" style={{ width: 540, minHeight: 380 }}>
+    <div className="border border-block/40 bg-block/5 p-5" style={{ width: 380, minHeight: 360 }}>
       <VerdictBadge verdict="BLOCK" />
       <h2 className="mt-3 text-base font-semibold">Not rendered as a finished creative.</h2>
       <p className="mt-1 text-sm text-muted">
@@ -352,7 +439,14 @@ function BlockedPanel({ attempt }: { attempt: GenerationRun["attempts"][number] 
       </p>
       <div className="mt-4 border border-line bg-card p-3">
         <HighlightedCopy
-          text={[attempt.copy.headline, attempt.copy.subhead, attempt.copy.body, attempt.copy.cta]
+          text={[
+            attempt.copy.headline,
+            attempt.copy.subhead,
+            attempt.copy.body,
+            attempt.copy.cta,
+            attempt.copy.footnote,
+            attempt.copy.caption,
+          ]
             .filter(Boolean)
             .join("\n")}
           findings={attempt.score.findings}
@@ -362,7 +456,7 @@ function BlockedPanel({ attempt }: { attempt: GenerationRun["attempts"][number] 
   );
 }
 
-function ClaimTracePanel({ attempt }: { attempt: GenerationRun["attempts"][number] }) {
+function ClaimTracePanel({ attempt }: { attempt: PlacementRun["attempts"][number] }) {
   if (attempt.copy.claimTrace.length === 0) return null;
   return (
     <div>
@@ -377,9 +471,7 @@ function ClaimTracePanel({ attempt }: { attempt: GenerationRun["attempts"][numbe
             const bad = attempt.ungrounded.some((u) => u.claim === t.claim);
             return (
               <tr key={i} className="border-t border-line align-top">
-                <td className="w-1/3 py-2 pr-4">
-                  {bad ? <span className="text-block">{t.claim}</span> : t.claim}
-                </td>
+                <td className="w-1/3 py-2 pr-4">{bad ? <span className="text-block">{t.claim}</span> : t.claim}</td>
                 <td className="py-2 text-muted">{t.supportedBy}</td>
               </tr>
             );

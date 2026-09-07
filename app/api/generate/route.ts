@@ -17,6 +17,9 @@ const Body = z.object({
   url: z.string().min(1),
   angle: z.string().optional(),
   audience: z.string().optional(),
+  placements: z
+    .array(z.enum(["meta_feed_4x5", "meta_square_1x1", "meta_story_9x16", "pdp_listing_11x16"]))
+    .optional(),
   background: z.enum(["generated", "plain"]).optional(),
   backgroundHint: z.string().optional(),
 });

@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { AdCopy, type ClaimTrace, type ProductFacts } from "@/lib/types";
-import { buildCopyPrompt, COPY_LIMITS, COPY_SCHEMA, type Brief } from "./prompt";
+import { buildCopyPrompt, COPY_SCHEMA, type Brief } from "./prompt";
+import { canvasWordCount, fieldsFor, type CopyField, type Placement } from "./placements";
 
 /**
  * Stage 3: write the copy.
@@ -17,7 +18,7 @@ export interface CopyResult {
   copy: AdCopy;
   /** Trace entries that could not be verified against the facts. */
   ungrounded: ClaimTrace[];
-  /** Copy fields over the 1080x1080 budget. A layout problem, not a compliance one. */
+  /** Copy fields over this placement's budget. Layout problems, not compliance ones. */
   overLength: string[];
   model: string;
 }
@@ -26,6 +27,7 @@ export class CopyError extends Error {}
 
 export async function generateCopy(
   facts: ProductFacts,
+  placement: Placement,
   brief: Brief = {},
   avoid: string[] = []
 ): Promise<CopyResult> {
@@ -34,7 +36,7 @@ export async function generateCopy(
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  const prompt = buildCopyPrompt(facts, brief, avoid);
+  const prompt = buildCopyPrompt(facts, placement, brief, avoid);
 
   let lastError = "";
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -55,10 +57,15 @@ export async function generateCopy(
         continue;
       }
 
+      // A field this placement does not use is blanked rather than trusted to be
+      // empty. The model is told to leave it alone; the artboard should not
+      // depend on it having listened.
+      const copy = clearUnusedFields(parsed.data, placement);
+
       return {
-        copy: parsed.data,
-        ungrounded: verifyClaimTrace(facts, parsed.data),
-        overLength: overLengthFields(parsed.data),
+        copy,
+        ungrounded: verifyClaimTrace(facts, copy),
+        overLength: overLengthFields(copy, placement),
         model: COPY_MODEL,
       };
     } catch (e) {
@@ -72,8 +79,31 @@ export async function generateCopy(
   throw new CopyError(`Copy generation failed after a retry. ${lastError}`);
 }
 
-/** The text the scorer sees. Spans in findings are offsets into this string. */
+const ALL_FIELDS: CopyField[] = ["headline", "subhead", "body", "cta", "footnote"];
+
+function clearUnusedFields(copy: AdCopy, placement: Placement): AdCopy {
+  const used = new Set(fieldsFor(placement));
+  const out = { ...copy };
+  for (const f of ALL_FIELDS) if (!used.has(f)) out[f] = "";
+  if (!placement.hasCaption) out.caption = "";
+  return out;
+}
+
+/**
+ * The text the scorer sees.
+ *
+ * The caption is included deliberately. On a Meta placement the caption is
+ * where the actual argument gets made, so scoring only the canvas would check
+ * the six words nobody reads closely and ignore the paragraph making the claim.
+ */
 export function adText(copy: AdCopy): string {
+  return [copy.headline, copy.subhead, copy.body, copy.cta, copy.footnote, copy.caption]
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** Just what is rendered on the image. Used for the canvas word budget. */
+export function canvasText(copy: AdCopy): string {
   return [copy.headline, copy.subhead, copy.body, copy.cta].filter(Boolean).join("\n");
 }
 
@@ -92,6 +122,10 @@ function normalise(s: string): string {
  * the same ProductFacts attached and does not care what the generator chose to
  * declare. The trace catches the confident mistake. The scorer catches the
  * convenient omission.
+ *
+ * Note the two halves are checked independently, against different sources.
+ * That is what lets a translated ad verify: the claim can be in Hindi while the
+ * evidence it points at stays in the English product facts.
  */
 export function verifyClaimTrace(facts: ProductFacts, copy: AdCopy): ClaimTrace[] {
   const haystack = normalise(
@@ -115,8 +149,27 @@ export function verifyClaimTrace(facts: ProductFacts, copy: AdCopy): ClaimTrace[
   });
 }
 
-function overLengthFields(copy: AdCopy): string[] {
-  return (Object.keys(COPY_LIMITS) as (keyof typeof COPY_LIMITS)[])
-    .filter((k) => copy[k].length > COPY_LIMITS[k])
-    .map((k) => `${k} is ${copy[k].length} characters, budget is ${COPY_LIMITS[k]}`);
+function overLengthFields(copy: AdCopy, placement: Placement): string[] {
+  const out: string[] = [];
+
+  for (const f of fieldsFor(placement)) {
+    const budget = placement.fields[f] ?? 0;
+    const len = copy[f].length;
+    if (len > budget) out.push(`${f} is ${len} characters, budget is ${budget}`);
+  }
+
+  const words = canvasWordCount({
+    headline: copy.headline,
+    subhead: copy.subhead,
+    body: copy.body,
+    cta: copy.cta,
+  });
+  if (words > placement.canvasWordLimit) {
+    out.push(
+      `canvas carries ${words} words, and ${placement.label} wants under ${placement.canvasWordLimit}` +
+        (placement.hasCaption ? ". Move the argument into the caption." : ".")
+    );
+  }
+
+  return out;
 }

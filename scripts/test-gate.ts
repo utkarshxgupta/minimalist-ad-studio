@@ -16,6 +16,7 @@ import { scoreAd } from "../lib/scorer";
 import { avoidList, chooseBest, decide, shouldRetry, MAX_WARN_RETRIES, type Attempt } from "../lib/generator/gate";
 import { verifyClaimTrace, adText } from "../lib/generator/copy";
 import { sanitiseHint, buildBackgroundPrompt } from "../lib/generator/background";
+import { PLACEMENT_LIST, canvasWordCount, fieldsFor, placement } from "../lib/generator/placements";
 
 const FACTS: ProductFacts = {
   url: "https://beminimalist.co/products/salicylic-acid-2",
@@ -209,6 +210,46 @@ check("the background prompt always forbids the product and people", () => {
   const p = buildBackgroundPrompt(FACTS, "");
   for (const forbidden of ["no people", "no skin", "no product", "no text"]) {
     ok(p.includes(forbidden), `prompt should say "${forbidden}"`);
+  }
+});
+
+// --- Placements and the channel split --------------------------------------
+
+check("the footnote does not count against the canvas word budget", () => {
+  // It is fine print carrying the disclaimer. Counting it would push a
+  // compliant ad over the limit for being compliant.
+  const words = canvasWordCount({ headline: "one two three", footnote: "a b c d e f g h" });
+  eq(words, 3, "word count");
+});
+
+check("a placement only asks for the fields it renders", () => {
+  const story = placement("meta_story_9x16");
+  eq(fieldsFor(story).includes("body"), false, "a Story has no room for body copy");
+  const pdp = placement("pdp_listing_11x16");
+  eq(fieldsFor(pdp).includes("body"), true, "a listing image is where long copy belongs");
+});
+
+check("meta placements carry a caption, the listing image does not", () => {
+  for (const p of PLACEMENT_LIST) {
+    eq(p.hasCaption, p.channel === "meta", `${p.id} caption`);
+  }
+});
+
+check("short formats get a tighter canvas budget than the studied one", () => {
+  const story = placement("meta_story_9x16");
+  const pdp = placement("pdp_listing_11x16");
+  ok(story.canvasWordLimit < pdp.canvasWordLimit, "a Story is glanced at, a listing image is read");
+  // The point of the split: substantiation takes words, so the short formats
+  // are where evidence gets squeezed out.
+  ok(story.canvasWordLimit <= 12, "story budget should be genuinely tight");
+});
+
+check("every placement declares an aspect an image model will accept", () => {
+  const supported = new Set(["1:1", "4:5", "9:16", "3:4"]);
+  for (const p of PLACEMENT_LIST) {
+    ok(supported.has(p.imageAspect), `${p.id} asks for ${p.imageAspect}`);
+    ok(p.width > 0 && p.height > 0, `${p.id} has real dimensions`);
+    ok(Object.keys(p.fields).length > 0, `${p.id} renders at least one field`);
   }
 });
 

@@ -68,14 +68,14 @@ export function sanitiseHint(raw: string): SanitisedHint {
   return { hint: hint.replace(/\s+/g, " ").trim(), rejected };
 }
 
-export function buildBackgroundPrompt(facts: ProductFacts, hint = ""): string {
+export function buildBackgroundPrompt(facts: ProductFacts, hint = "", aspect = "1:1"): string {
   const environment = hint ? `Mood the marketer asked for, applied only to light and material: ${hint}.` : "";
 
   return `A photographic studio backdrop for a skincare product advertisement. This
 image is a BACKGROUND ONLY. The product will be composited on top of it later,
 so the centre of the frame must stay simple and uncluttered.
 
-Composition: square, 1:1. A seamless surface in warm off-white with a soft
+Composition: ${aspect}. A seamless surface in warm off-white with a soft
 plinth or ledge in the lower third for a bottle to sit on. Gentle diffused
 daylight from the upper left, soft natural shadow. Generous negative space in
 the upper half where a headline will be placed.
@@ -87,8 +87,8 @@ no bottle, no packaging, no text, no lettering, no logos, no watermarks, no
 water droplets, no laboratory or clinical staging, no before-and-after framing,
 no charts or graphs.
 
-Style reference: quiet, material, editorial. The brand is ${facts.name.split(" ")[0]}'s
-science-led minimalism, not a spa advertisement.`;
+Style reference: quiet, material, editorial. This is Minimalist's science-led
+minimalism, not a spa advertisement.`;
 }
 
 export interface BackgroundResult {
@@ -98,23 +98,29 @@ export interface BackgroundResult {
   prompt: string;
   model: string;
   hint: SanitisedHint;
+  /** Which aspect ratio this backdrop was generated at. */
+  aspect: string;
 }
 
 export class BackgroundError extends Error {}
 
-export async function generateBackground(facts: ProductFacts, rawHint = ""): Promise<BackgroundResult> {
+export async function generateBackground(
+  facts: ProductFacts,
+  rawHint = "",
+  aspect: string = "1:1"
+): Promise<BackgroundResult> {
   if (!process.env.GEMINI_API_KEY) {
     throw new BackgroundError("GEMINI_API_KEY is not set, so no background can be generated.");
   }
 
   const hint = sanitiseHint(rawHint);
-  const prompt = buildBackgroundPrompt(facts, hint.hint);
+  const prompt = buildBackgroundPrompt(facts, hint.hint, aspect);
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
 
   const res = await ai.models.generateContent({
     model: BACKGROUND_MODEL,
     contents: prompt,
-    config: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: "1:1" } },
+    config: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: aspect } },
   });
 
   for (const part of res.candidates?.[0]?.content?.parts ?? []) {
@@ -125,6 +131,7 @@ export async function generateBackground(facts: ProductFacts, rawHint = ""): Pro
         prompt,
         model: BACKGROUND_MODEL,
         hint,
+        aspect,
       };
     }
   }

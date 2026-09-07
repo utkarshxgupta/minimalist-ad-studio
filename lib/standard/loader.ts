@@ -85,3 +85,30 @@ export function registryDigest(): string {
     .map((c) => `- ${c.id} | ${c.product} | ${c.claim} | evidence: ${c.evidence}`)
     .join("\n");
 }
+
+export interface Disclosure {
+  id: string;
+  applies_to: string;
+  text: string;
+  provenance: string;
+  source: string;
+  source_confidence: string;
+  verified: boolean;
+  note?: string;
+}
+
+let disclosureCache: { version: string; disclosures: Disclosure[] } | null = null;
+
+/**
+ * Text that must appear on the creative, as opposed to rules about what the
+ * copy may say. Loaded from standard/ rather than hardcoded, because a
+ * disclaimer is a string the brand owns and its wording carries legal weight:
+ * a footnote that misstates who ran the study is its own problem.
+ */
+export function loadDisclosures() {
+  if (disclosureCache) return disclosureCache;
+  const raw = readFileSync(join(process.cwd(), "standard", "disclosures.yaml"), "utf8");
+  const doc = parse(raw) as { version: string; disclosures: Disclosure[] };
+  disclosureCache = { version: doc.version, disclosures: doc.disclosures ?? [] };
+  return disclosureCache;
+}

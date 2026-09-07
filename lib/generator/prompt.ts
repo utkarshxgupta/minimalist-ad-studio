@@ -1,5 +1,6 @@
 import type { ProductFacts, Rule } from "@/lib/types";
-import { loadRulebook, registryDigest } from "@/lib/standard/loader";
+import { loadRulebook, loadDisclosures, registryDigest } from "@/lib/standard/loader";
+import { fieldsFor, type CopyField, type Placement } from "./placements";
 
 /**
  * The generation prompt, assembled from `standard/` at runtime.
@@ -22,8 +23,13 @@ export interface Brief {
   audience?: string;
 }
 
-/** 1080x1080 has a hard copy budget. Exceeding it is a layout bug, not a style note. */
-export const COPY_LIMITS = { headline: 60, subhead: 90, body: 180, cta: 24 };
+const FIELD_BRIEF: Record<CopyField, string> = {
+  headline: "the hook. The thing that earns the next second of attention.",
+  subhead: "one line qualifying the hook.",
+  body: "the argument, for a reader who is already zoomed in and studying.",
+  cta: "the action.",
+  footnote: "the substantiation disclaimer, set as fine print.",
+};
 
 export function factsBlock(facts: ProductFacts): string {
   const actives = facts.actives.length
@@ -65,7 +71,98 @@ ${block.map(render).join("\n\n")}
 ${warn.map(render).join("\n\n")}`;
 }
 
-export function buildCopyPrompt(facts: ProductFacts, brief: Brief = {}, avoid: string[] = []): string {
+/**
+ * The placement brief. This is where the channel split lands in the prompt.
+ *
+ * A feed ad and a PDP listing image are different formats with different jobs,
+ * so they get different copy, generated separately against their own budget.
+ * The alternative, one creative rescaled, silently truncates the evidence on
+ * the short formats, which is exactly where evidence matters most.
+ */
+function placementBlock(p: Placement): string {
+  const fields = fieldsFor(p)
+    .map((f) => `- ${f}: at most ${p.fields[f]} characters. ${FIELD_BRIEF[f]}`)
+    .join("\n");
+
+  const channelNote =
+    p.channel === "meta"
+      ? `This is a paid social placement. It is scrolled past, not studied, so the
+canvas carries the hook and the argument goes in the caption. Keep the words ON
+THE IMAGE under ${p.canvasWordLimit}, excluding the footnote.
+
+Write "caption" as the post copy: this is where a real case gets made, and it
+has room for the evidence that does not fit on the image. Several sentences is
+correct here. It is scored against the same rules as everything else.`
+      : `This is a product detail page listing image. The reader has already clicked
+and is zoomed in studying the chemistry, so long copy is correct here and thin
+copy wastes the placement. Aim for the body to do real explanatory work.
+
+There is no caption. The image must stand alone. Leave "caption" empty.`;
+
+  return `## The placement
+
+${p.label}, ${p.width} by ${p.height}.
+
+${channelNote}
+
+Write exactly these fields, and leave every other field an empty string:
+
+${fields}`;
+}
+
+/**
+ * The disclosure requirement.
+ *
+ * Loaded from standard/disclosures.yaml rather than hardcoded, and the prompt
+ * says the wording is fixed, because a disclaimer a model paraphrases is a
+ * disclaimer that can quietly stop naming who ran the study.
+ */
+function disclosureBlock(p: Placement): string {
+  if (!fieldsFor(p).includes("footnote")) return "";
+
+  const d = loadDisclosures().disclosures.find((x) => x.applies_to === "quantified_claim");
+  if (!d) return "";
+
+  const captionRule = p.hasCaption
+    ? `
+
+WHERE IT GOES. The disclaimer belongs with the claim it disclaims, and on this
+placement the canvas and the caption are read by different people at different
+moments.
+
+- Quantified claim on the canvas: "footnote" carries the disclaimer.
+- Quantified claim only in the caption: end the caption with the disclaimer
+  instead, and leave "footnote" empty.
+- Both: put it in both.
+
+A disclaimer printed on an image whose claim lives in the caption satisfies
+nobody. The scroller reads a footnote for a claim that is not on the image, and
+the caption reader gets the claim with no source attached.`
+    : "";
+
+  return `\n## The substantiation footnote
+
+If any copy you write carries a quantified claim, a percentage of users, a
+proportion, or a result in a stated number of days or weeks, it must be
+accompanied by exactly this string and nothing else:
+
+${d.text}
+
+Reproduce it character for character. Do not reword it, shorten it, or drop the
+asterisk. If your copy makes no quantified claim anywhere, leave "footnote"
+empty rather than adding it decoratively.${captionRule}
+
+A claim whose substantiation is legible only to the reviewer is not
+substantiated to the reader.
+`;
+}
+
+export function buildCopyPrompt(
+  facts: ProductFacts,
+  placement: Placement,
+  brief: Brief = {},
+  avoid: string[] = []
+): string {
   const book = loadRulebook();
 
   const briefLine = [
@@ -83,7 +180,7 @@ export function buildCopyPrompt(facts: ProductFacts, brief: Brief = {}, avoid: s
     : "";
 
   return `You write advertising copy for Minimalist, an Indian science-led skincare
-brand. You are writing one 1080x1080 social ad.
+brand.
 
 ## The only facts you may use
 
@@ -97,6 +194,8 @@ ${factsBlock(facts)}
 </product-facts>
 
 ${briefLine ? `## The brief\n\n${briefLine}\n` : ""}
+${placementBlock(placement)}
+
 ## The standard you are writing to
 
 ${constraintBlock(book.active)}
@@ -105,6 +204,8 @@ ${constraintBlock(book.active)}
 
 These are the only studies this brand can cite. A number or a study reference
 that is not in this list is unsubstantiated no matter how precise it sounds.
+Note which product each study belongs to: a study run on one product does not
+substantiate a claim about another.
 
 ${registryDigest()}
 
@@ -115,14 +216,7 @@ Excessive Oil", which is as strong as anything a competitor says. What makes it
 legitimate is that the evidence is attached. So write with conviction, and
 attach the evidence, or drop the claim. Do not hedge a claim into vagueness and
 call it compliant: "may help support skin wellness" is worse copy and no safer.
-${avoidBlock}
-## Copy budget
-
-- headline: at most ${COPY_LIMITS.headline} characters
-- subhead: at most ${COPY_LIMITS.subhead} characters
-- body: at most ${COPY_LIMITS.body} characters
-- cta: at most ${COPY_LIMITS.cta} characters
-
+${disclosureBlock(placement)}${avoidBlock}
 ## The claim trace
 
 For every phrase in your copy that makes a claim about what the product is or
@@ -145,6 +239,8 @@ export const COPY_SCHEMA = {
     subhead: { type: "string" },
     body: { type: "string" },
     cta: { type: "string" },
+    footnote: { type: "string" },
+    caption: { type: "string" },
     claimTrace: {
       type: "array",
       items: {
@@ -157,5 +253,5 @@ export const COPY_SCHEMA = {
       },
     },
   },
-  required: ["headline", "subhead", "body", "cta", "claimTrace"],
+  required: ["headline", "subhead", "body", "cta", "footnote", "caption", "claimTrace"],
 } as const;
