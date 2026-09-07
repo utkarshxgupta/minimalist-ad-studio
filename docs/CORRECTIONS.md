@@ -130,3 +130,51 @@ the system including the four that Part A introduced.
 working agreement in CLAUDE.md says to verify them. Internal citations had no
 such rule, so nothing checked them. The lesson is not "be more careful"; it is
 that the citations which got verified were the ones something forced.
+
+---
+
+## C-006: A substantiation claim was filed against the wrong product
+
+**Claimed.** `SUB-004` in `standard/claims-registry.yaml` recorded "97% of
+subjects said skin felt less oily throughout the day after 2 weeks" as a study
+belonging to **Niacinamide 10% Face Serum**.
+
+**Actual.** That study is on the **Salicylic Acid 2% Face Serum** page. The
+Niacinamide page carries ingredient-mechanism copy and no consumer study at all,
+so there was no percentage to attribute in the first place.
+
+**How it was caught.** Cross-checking the registry against the scraped
+`ProductFacts` while reviewing an external spec that had transposed the same
+family of numbers. Not by any check in the project. The external spec's error is
+what prompted looking; the error found was ours.
+
+**Severity of the error.** High, and worse than a wrong number. `POLICY-012`
+exists to answer "is the cited study one of ours". A misfiled entry does not
+fail loudly: it means an ad for Niacinamide claiming "97% said skin felt less
+oily" gets looked up, found, and **certified**. The rule works exactly as
+designed and licenses a claim that product has never made.
+
+**The shape of it.** `POLICY-012` verifies ad copy against the registry. Nothing
+was verifying the registry against reality. The control had a control, and the
+control did not. This is the same failure the registry was built to prevent,
+displaced one level up, which is where these tend to hide.
+
+**Fix.** Three things, because fixing only the entry would leave the hole.
+
+1. `SUB-004` refiled against Salicylic Acid.
+2. Every entry now carries `product_handle` and `verbatim`, so an entry states
+   which product it belongs to and quotes the page text backing it.
+3. `npm run test:registry` asserts every `verbatim` appears word for word in
+   that product's `ProductFacts`, that handles are real products, and that no
+   claim is filed against a product whose page contains no study. Verified by
+   reintroducing the bug: it fails two checks independently.
+
+**Also done, since the data was in hand.** The registry went from 7 entries to
+19, every one verbatim-checked. `docs/FAILURE-MODES.md` section 10 warned that a
+thin registry produces false positives on real claims, because a claim absent
+from the registry reads as unsubstantiated. Twelve real claims were absent.
+
+**What it says about the process.** The registry was described in its own header
+as "a demonstration of the mechanism, not a complete registry", and that framing
+made it feel exempt from checking. Demonstrations get graded too, and a wrong
+example teaches the wrong thing.

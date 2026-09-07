@@ -148,15 +148,34 @@ product page", not "certainly lawful".
 
 ---
 
-## 10. The substantiation registry is a demonstration
+## 10. The substantiation registry records marketing summaries, not studies
 
 `standard/claims-registry.yaml` holds the studies this brand may cite.
-`POLICY-012` checks citations against it. The file is populated from what the
-product pages state, not from the actual study reports, and it is not complete.
+`POLICY-012` checks citations against it. It now carries 19 entries covering
+every consumer study published on the six scraped product pages, and every entry
+is machine-checked against the scraped `ProductFacts` by `npm run test:registry`.
 
-A claim absent from the registry reads as unsubstantiated. Until the registry is
-owned by whoever holds the studies, that produces false positives on real claims
-whose evidence exists but is not written down here.
+Two limits remain, and the second is the real one.
+
+**Coverage.** Only products in the scraped catalogue are represented. A claim
+absent from the registry reads as unsubstantiated, so an unscraped product's
+real claims will produce false positives.
+
+**Provenance.** Entries are extracted from **product page copy**, which is the
+brand's own summary of its studies, not the study reports. "93% subjects saw
+significant reduction in active acne in 4 weeks" is recorded because the page
+says so, not because the report was read. Sample size, methodology, controls and
+whether the panel was representative are all unknown here. `SUB-001` is the
+exception and shows the standard the rest should meet: a named lab, a named ISO
+standard, and a study number.
+
+So the registry currently answers "did the brand publish this claim", not "is
+this claim substantiated". Those are different questions, and closing the gap is
+a process problem owned by whoever holds the studies, not a software one.
+
+This was also where a real error lived for four commits: a study filed against
+the wrong product, which `POLICY-012` would have used to certify an ad making a
+claim that product never made. See `docs/CORRECTIONS.md` C-006.
 
 ---
 

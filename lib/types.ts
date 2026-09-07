@@ -130,6 +130,24 @@ export const AdCopy = z.object({
   subhead: z.string(),
   body: z.string(),
   cta: z.string(),
+  /**
+   * The substantiation disclaimer, rendered as fine print on the creative.
+   *
+   * Required whenever the copy carries a quantified claim. POLICY-003 asks
+   * whether evidence is attached; this is where the brand's own convention
+   * attaches it visually. Observed across the brand's asset library as
+   * "*Claims are based on study conducted by an independent lab; individual
+   * results may vary."
+   */
+  footnote: z.string().default(""),
+  /**
+   * Deep copy for the platform post, not rendered on the image.
+   *
+   * Meta placements get a few words on the canvas and put the argument in the
+   * caption. Writing the body onto a feed image is the wrong output shape and
+   * squeezes out the evidence that makes a strong claim legitimate.
+   */
+  caption: z.string().default(""),
   claimTrace: z.array(ClaimTrace),
 });
 export type AdCopy = z.infer<typeof AdCopy>;

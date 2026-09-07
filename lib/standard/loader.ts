@@ -53,8 +53,12 @@ export function rulesFor(dimension: Rule["dimension"], book = loadRulebook()): R
 export interface RegistryEntry {
   id: string;
   product: string;
+  /** Links the entry to a scraped product, so it can be checked. See C-006. */
+  product_handle: string;
   claim: string;
   evidence: string;
+  /** Exact page text backing the claim. Verified by npm run test:registry. */
+  verbatim: string;
   source_type: string;
   note?: string;
 }

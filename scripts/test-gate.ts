@@ -58,7 +58,7 @@ function score(verdict: Verdict, findings: Finding[] = [], failed: ScoreResult["
 function attempt(over: Partial<Attempt> = {}): Attempt {
   return {
     index: 0,
-    copy: { headline: "h", subhead: "s", body: "b", cta: "c", claimTrace: [] },
+    copy: { headline: "h", subhead: "s", body: "b", cta: "c", footnote: "", caption: "", claimTrace: [] },
     score: score("PASS"),
     ungrounded: [],
     overLength: [],
@@ -159,7 +159,7 @@ check("ties go to the earlier attempt", () => {
 // --- Claim grounding -------------------------------------------------------
 
 function copyWith(trace: AdCopy["claimTrace"], body = "Reduces Acne, Blackheads & Excessive Oil"): AdCopy {
-  return { headline: "Clear skin, earned", subhead: "", body, cta: "Shop Now", claimTrace: trace };
+  return { headline: "Clear skin, earned", subhead: "", body, cta: "Shop Now", footnote: "", caption: "", claimTrace: trace };
 }
 
 check("a claim traced to real page text verifies", () => {

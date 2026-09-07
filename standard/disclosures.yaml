@@ -1,0 +1,36 @@
+# Required disclosures.
+#
+# Text that must appear ON the creative, as opposed to rules about what the copy
+# may say. Separated from claims.rules.yaml because it is a different kind of
+# object: a rule is a test, a disclosure is a string the brand owns.
+#
+# This exists because POLICY-003 asks whether evidence is attached to a
+# quantified claim, and until now "attached" meant "mentioned in the copy". On a
+# real creative the brand attaches it visually, as fine print under the stat.
+# A claim whose substantiation is legible only to the scorer is not substantiated
+# to the reader.
+
+version: "0.1.0"
+
+disclosures:
+  - id: DISC-001
+    applies_to: quantified_claim
+    text: "*Claims are based on a study conducted by an independent lab. Individual results may vary."
+    provenance: external_audit
+    source: >
+      Reported by an external audit of the brand's Meta Ad Library creatives and
+      Shopify listing infographics, as the standing footnote accompanying
+      percentage claims.
+    source_confidence: secondary
+    verified: false
+    note: >
+      NOT verified against any source this repo can reach. The wording appears on
+      none of the eight scraped product pages, where the only standing note is
+      the patch-testing safety line, so it is presumably an ad-creative
+      convention rather than a page convention. That is plausible and unproven.
+
+      The requirement is sound regardless of the wording: a percentage claim
+      needs its source disclosed where the reader can see it. Only the exact
+      string is uncertain, and a brand owner can settle it in one message.
+      Recorded as secondary and unverified rather than quietly hardcoded,
+      because a disclosure that misstates who ran the study is its own problem.
