@@ -94,6 +94,39 @@ Product URL in, composed creative out.
 copy-length budget and therefore the claim surface, so supporting one properly
 beats four badly.
 
+### Build notes, fetch and extract
+
+**Extraction uses no model at all.** The plan allowed a model to propose
+`statedBenefits` under verbatim verification. It turned out not to be needed:
+the storefront renders every content block as a `toggle-tab`, so the benefit
+bullets, the per-ingredient concentrations and the substantiation notes are all
+readable from structure. Fully deterministic `ProductFacts` is a stronger
+position than model-proposed-then-verified, so the model path was dropped rather
+than kept in case it was useful later. This matters more than it sounds: if a
+model extracted the facts, a hallucinated fact would become a *licensed* claim,
+and the grounding check in invariant 4 would certify the ad against fiction.
+
+**The fetcher is host-allowlisted.** A server-side fetch of a user-supplied URL
+is an SSRF primitive: type an internal address and the server retrieves it and
+hands back the body. Only `beminimalist.co` is fetchable, and only over https. A
+blocklist of private ranges is the weaker control, because it has to be complete
+to work and an allowlist does not.
+
+**Snapshots, not a cache.** Live first, committed `ProductFacts` snapshots as
+fallback, and the result carries which path ran plus the capture date so the UI
+can say so. `AD_STUDIO_OFFLINE=1` forces the snapshot path, which is how the
+fallback is tested on purpose and how a reviewer with no network still sees the
+pipeline work.
+
+**Three parser bugs the first live run caught**, all now regression cases in
+`npm run test:extract`: "Niacinamide 10% Face Serum" yielded a 10% active called
+*Face*; the site header's "Save an additional up to 15% off" was read as a
+formulation; and a letters-only tokeniser silently dropped "Vitamin B5" and
+"Hyaluronic + PGA". The third is the instructive one, because it fails quietly.
+The other two produce visible nonsense; that one just loses an ingredient, and
+an ad written against incomplete facts is exactly what this pipeline is supposed
+to prevent.
+
 ## How A and B connect: gate
 
 The generator self-scores before it renders. A BLOCK-severity claims finding

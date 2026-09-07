@@ -8,7 +8,9 @@
     "start": "next start",
     "lint": "eslint",
     "eval": "tsx scripts/eval.ts",
-    "redteam": "tsx scripts/redteam.ts"
+    "redteam": "tsx scripts/redteam.ts",
+    "snapshot": "tsx scripts/snapshot.ts",
+    "test:extract": "tsx scripts/test-extract.ts"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",

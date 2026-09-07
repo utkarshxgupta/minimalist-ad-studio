@@ -1,0 +1,257 @@
+import * as cheerio from "cheerio";
+import type { ProductFacts } from "@/lib/types";
+import { absoluteImageUrl, type PageBundle } from "./fetch";
+
+/**
+ * Stage 2: turn a page into `ProductFacts`.
+ *
+ * No model runs here, deliberately. `ProductFacts` is the ground truth that
+ * invariant 4 checks generated claims against. If a model extracted the facts,
+ * a hallucinated fact would become a licensed claim: the grounding check would
+ * look up "2% Salicylic Acid", find the invented entry, and certify the ad. The
+ * check would still pass. It would just be checking against fiction.
+ *
+ * So extraction is DOM structure and regex, and when it cannot find something it
+ * says so in `warnings` rather than filling the gap. An empty field a marketer
+ * can see is safer than a plausible field nobody can trace.
+ */
+
+export interface ExtractionResult {
+  facts: ProductFacts;
+  /** Fields that could not be read. Surfaced in the UI, never silently defaulted. */
+  warnings: string[];
+}
+
+/** A block of page content. The storefront renders each one as a toggle-tab. */
+export interface Section {
+  title: string;
+  bullets: string[];
+  text: string;
+}
+
+const MAX_RAW_TEXT = 6000;
+const MAX_ACTIVES = 6;
+
+/**
+ * Words that sit immediately before a percentage but are not ingredients.
+ * "Pure 10% Niacinamide" and "Save an additional up to 15% off" are the same
+ * shape to a regex; only one of them is a formulation fact.
+ */
+const NOT_AN_INGREDIENT = new Set([
+  "pure", "high", "up", "upto", "extra", "additional", "save", "get", "off", "flat",
+  "with", "contains", "our", "this", "that", "formulated", "only", "new", "best",
+  "uses", "in", "of", "at", "from", "now", "and", "plus", "the", "buy", "shop",
+  "sale", "mrp", "gst", "price", "total", "base", "free", "over", "under", "select",
+  // Product form and body part. "Niacinamide 10% Face Serum" contains the
+  // string "10% Face", which the inverted pattern reads as a 10% active called
+  // Face. No ingredient is named after the thing you put it on.
+  "face", "body", "hair", "lip", "skin", "serum", "cleanser", "moisturizer",
+  "moisturiser", "sunscreen", "shampoo", "lotion", "cream", "gel", "ointment",
+  "toner", "mask", "clinical", "results",
+]);
+
+/** Generic product-form words to strip off the tail of a captured ingredient name. */
+const FORM_WORDS =
+  /\s+(?:face|body|hair|lip)?\s*(?:serum|cleanser|moisturizer|moisturiser|sunscreen|shampoo|lotion|cream|gel|oil|ointment|toner|mask)\b.*$/i;
+
+export function extractFacts(bundle: PageBundle): ExtractionResult {
+  const $ = cheerio.load(bundle.html);
+  const warnings: string[] = [];
+
+  const ld = productJsonLd($);
+
+  const name = clean($("h1.product__title").first().text()) || bundle.product?.title || ld?.name || "";
+  if (!name) warnings.push("Product name not found on the page.");
+
+  const subtitle = clean($("span.product__subtitle").first().text());
+  if (!subtitle) warnings.push("Product subtitle not found. Benefit copy will be thinner.");
+
+  const sections = readSections($);
+
+  const potent = sections.find((s) => /what makes it potent/i.test(s.title));
+  const statedBenefits = [subtitle, ...(potent?.bullets ?? [])].filter(Boolean);
+  if (statedBenefits.length === 0) {
+    warnings.push(
+      "No stated benefits found. Every generated claim must trace to one of these, so generation will be heavily constrained."
+    );
+  }
+
+  const heroImageUrl =
+    absoluteImageUrl(bundle.product?.featured_image ?? null) ??
+    absoluteImageUrl(ld?.image ?? null) ??
+    absoluteImageUrl($('meta[property="og:image"]').attr("content") ?? null);
+  if (!heroImageUrl) {
+    warnings.push("No product photograph found, and invariant 5 forbids generating one.");
+  }
+
+  const actives = extractActives(name, subtitle, sections);
+  if (actives.length === 0) {
+    warnings.push("No active and concentration could be read. Concentration claims will be blocked.");
+  }
+
+  return {
+    facts: {
+      url: bundle.url,
+      name,
+      actives,
+      statedBenefits,
+      heroImageUrl,
+      rawText: buildRawText(name, subtitle, sections),
+    },
+    warnings,
+  };
+}
+
+function clean(s: string): string {
+  return s.replace(/\s+/g, " ").trim();
+}
+
+/**
+ * Every content block on the page is a `toggle-tab` with a title node and a
+ * content node: "What Makes It Potent?", "Ideal For", "How to Use", "Consumer
+ * Studies", and one tab per ingredient. Reading all of them keeps the
+ * per-ingredient concentrations and the substantiation notes, both of which the
+ * claim rules need.
+ */
+function readSections($: cheerio.CheerioAPI): Section[] {
+  const out: Section[] = [];
+
+  $("toggle-tab").each((_, el) => {
+    const tab = $(el);
+    const title = clean(tab.find("[data-js-title]").first().text());
+    const content = tab.find("[data-js-content]").first();
+    if (!title || content.length === 0) return;
+
+    const bullets = content
+      .find("li")
+      .map((__, li) => clean($(li).text()))
+      .get()
+      .filter(Boolean);
+
+    out.push({ title, bullets, text: clean(content.text()) });
+  });
+
+  return out;
+}
+
+function buildRawText(name: string, subtitle: string, sections: Section[]): string {
+  const parts = [name, subtitle].filter(Boolean);
+  for (const s of sections) {
+    const body = s.bullets.length ? s.bullets.map((b) => `- ${b}`).join("\n") : s.text;
+    if (body) parts.push(`## ${s.title}\n${body}`);
+  }
+  return parts.join("\n\n").slice(0, MAX_RAW_TEXT);
+}
+
+/**
+ * Three passes, most trustworthy first.
+ *
+ * 1. Per-ingredient tabs, where the heading names the ingredient and the body
+ *    states the strength: "Niacinamide" / "a high concentration of 10%".
+ * 2. "<Ingredient> <n>%" in the title, subtitle or benefit bullets.
+ * 3. "<n>% <Ingredient>", the inverted phrasing the brand also uses.
+ *
+ * Scoped to the product region. The site navigation advertises six other
+ * products and a "15% off" promotion, and a whole-page regex would record both
+ * as facts about the product being scored.
+ */
+export function extractActives(
+  name: string,
+  subtitle: string,
+  sections: Section[]
+): ProductFacts["actives"] {
+  const found = new Map<string, { ingredient: string; concentration: string }>();
+
+  const record = (ingredient: string, concentration: string) => {
+    const cleaned = cleanIngredient(ingredient);
+    if (!cleaned) return;
+    const key = cleaned.toLowerCase();
+    if (!found.has(key)) found.set(key, { ingredient: cleaned, concentration });
+  };
+
+  for (const s of sections) {
+    if (isContentSection(s.title)) continue;
+    const pct = s.text.match(/(\d{1,2}(?:\.\d{1,2})?)\s*%/);
+    if (pct && !isDiscountContext(s.text, pct.index ?? 0)) record(s.title, `${pct[1]}%`);
+  }
+
+  const copy = [name, subtitle, ...sections.flatMap((s) => s.bullets)].filter(Boolean);
+
+  // Ingredient names carry digits and joiners: "Vitamin B5", "Hyaluronic + PGA",
+  // "Coenzyme Q10". A letters-only tokeniser silently drops all three.
+  const TOKEN = "[A-Z][A-Za-z0-9-]*(?:[\\s+&]+[A-Z][A-Za-z0-9-]*){0,2}";
+  const PCT = "(\\d{1,2}(?:\\.\\d{1,2})?)\\s*%";
+  const before = new RegExp(`(${TOKEN})\\s+${PCT}`, "g");
+  const after = new RegExp(`${PCT}\\s+(${TOKEN})\\b`, "g");
+  // SPF is a strength claim stated without a percent sign. Reading it as a fact
+  // is what lets copy say "SPF 50" without the claim being ungrounded.
+  const spf = /\bSPF\s*(\d{2,3})\b/g;
+
+  for (const line of copy) {
+    for (const m of line.matchAll(before)) {
+      if (isDiscountContext(line, m.index ?? 0)) continue;
+      record(m[1], `${m[2]}%`);
+    }
+    for (const m of line.matchAll(after)) {
+      if (isDiscountContext(line, m.index ?? 0)) continue;
+      record(m[2], `${m[1]}%`);
+    }
+    for (const m of line.matchAll(spf)) record("SPF", m[1]);
+  }
+
+  return [...found.values()].slice(0, MAX_ACTIVES);
+}
+
+function cleanIngredient(raw: string): string | null {
+  const stripped = raw.replace(FORM_WORDS, "").replace(/[^A-Za-z0-9 +-]/g, " ").trim();
+  if (!stripped) return null;
+
+  const words = stripped.split(/\s+/).filter((w) => !NOT_AN_INGREDIENT.has(w.toLowerCase()));
+  if (words.length === 0) return null;
+
+  const name = words.join(" ");
+  if (name.length < 3 || name.length > 40) return null;
+  return name;
+}
+
+/** "15% off", "up to 20% discount". A promotion is not a formulation. */
+function isDiscountContext(line: string, at: number): boolean {
+  return /\b(?:off|discount|sale|save|cashback|extra)\b/i.test(line.slice(at, at + 40));
+}
+
+function isContentSection(title: string): boolean {
+  return /what makes|ideal for|how to use|consumer studies|clinical result|all ingredients|shipping|return|faq|review/i.test(
+    title
+  );
+}
+
+interface ProductLd {
+  name?: string;
+  image?: string | null;
+}
+
+function productJsonLd($: cheerio.CheerioAPI): ProductLd | null {
+  for (const el of $('script[type="application/ld+json"]').toArray()) {
+    const raw = $(el).contents().text();
+    if (!raw.trim()) continue;
+
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(raw);
+    } catch {
+      continue;
+    }
+
+    for (const node of Array.isArray(parsed) ? parsed : [parsed]) {
+      if (typeof node !== "object" || node === null) continue;
+      const n = node as Record<string, unknown>;
+      if (n["@type"] !== "Product") continue;
+      const image = Array.isArray(n.image) ? n.image[0] : n.image;
+      return {
+        name: typeof n.name === "string" ? n.name : undefined,
+        image: typeof image === "string" ? image : null,
+      };
+    }
+  }
+  return null;
+}
