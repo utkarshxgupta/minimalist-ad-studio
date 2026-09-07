@@ -13,7 +13,8 @@
     "test:extract": "tsx scripts/test-extract.ts",
     "generate": "tsx scripts/generate.ts",
     "test:gate": "tsx scripts/test-gate.ts",
-    "test": "npm run test:extract && npm run test:gate"
+    "test": "npm run test:extract && npm run test:gate && npm run test:citations",
+    "test:citations": "tsx scripts/test-citations.ts"
   },
   "dependencies": {
     "@google/genai": "^2.21.0",

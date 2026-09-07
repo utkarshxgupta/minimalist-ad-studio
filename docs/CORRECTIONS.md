@@ -100,3 +100,33 @@ Recorded so that no reader assumes more verification happened than did.
 
 Rule 36 and the CDSCO notice are the two load-bearing citations that rest on
 secondary sources. Both are flagged as such in `standard/regulatory-sources.md`.
+
+---
+
+## C-005: A rule cited a document that did not exist
+
+**Claimed.** `POLICY-012` cited its source as "Ours. Response to a red-team
+finding, see docs/FAILURE-MODES.md and standard/claims-registry.yaml."
+`standard/claims-registry.yaml` also referred readers to
+`docs/FAILURE-MODES.md`.
+
+**Actual.** `docs/FAILURE-MODES.md` did not exist. It had been named in two
+places across two commits and never written.
+
+**How it was caught.** Grepping the repo for dangling cross-references while
+building Part A, not by any check that exists in the project.
+
+**Severity of the error.** Higher than it looks. This is the same failure the
+whole project is about, committed by the project: an authority cited by name,
+which a reader would reasonably assume had been checked, and which was not
+there. C-001 and C-002 were wrong citations of external sources. This one is a
+wrong citation of ourselves, which is worse, because there was no retrieval
+failure to blame.
+
+**Fix.** `docs/FAILURE-MODES.md` written, with the twelve known weaknesses of
+the system including the four that Part A introduced.
+
+**What it says about the process.** Regulatory citations were verified because a
+working agreement in CLAUDE.md says to verify them. Internal citations had no
+such rule, so nothing checked them. The lesson is not "be more careful"; it is
+that the citations which got verified were the ones something forced.
