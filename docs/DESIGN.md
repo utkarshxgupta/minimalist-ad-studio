@@ -90,9 +90,14 @@ Product URL in, composed creative out.
   background, itself scored.
 - Export to PNG.
 
-**One placement, 1080x1080.** Cut deliberately: each placement changes the
+**One placement, 1080x1080.** ~~Cut deliberately: each placement changes the
 copy-length budget and therefore the claim surface, so supporting one properly
-beats four badly.
+beats four badly.~~
+
+**Superseded.** Four placements now, across two channels. The reasoning above
+was right about the mechanism and wrong about the conclusion: because each
+placement changes the claim surface, supporting one and rescaling it is the
+unsafe option, not the conservative one. See "Build notes, the channel split".
 
 ### Build notes, fetch and extract
 
@@ -165,6 +170,55 @@ overrides to a module-level array on the server would look durable and lose
 every entry on the next deploy. An audit trail nobody can trust is worse than
 none, because people rely on it. Production writes to the review system; this
 writes to `localStorage` with a label.
+
+### Build notes, the channel split
+
+Derived from an external audit of the brand's real asset library, covering
+roughly 170 master assets and Meta Ad Library creatives. That is the corpus
+`docs/CORRECTIONS.md` C-003 records as unobtainable here, so the findings below
+come from a source this repo cannot independently verify, and are labelled
+accordingly rather than absorbed silently.
+
+**Taken, and load-bearing.** PDP listing infographics and Meta paid ads are
+different formats, not one artefact at different sizes. The listing image is
+studied by a buyer who has already clicked and runs 40 to 90 words; the feed ad
+is scrolled past, keeps under 15 on the canvas, and moves the argument to the
+caption. The 11:16 listing format dominates the brand's own library and was
+absent here entirely.
+
+This is a compliance finding, not a design one, and it points against intuition.
+Substantiation costs words: the acne study claim is eleven of the fifteen a feed
+ad gets. The short formats are therefore where evidence gets squeezed out, which
+makes them the most dangerous placements the brand owns.
+
+**Taken, with provenance recorded.** The substantiation footnote convention. The
+requirement is sound and now enforced; the exact wording lives in
+`standard/disclosures.yaml` flagged `secondary` and `verified: false`, because
+it appears on none of the eight scraped product pages and is presumably an
+ad-creative convention. A disclosure that misstates who ran the study is its own
+problem, so it is not quietly hardcoded.
+
+**Taken, not yet built.** The leading-zero concentration convention (`02%` on
+packaging and creative, `2%` in website copy), the four sub-brand wordmarks, the
+brand type stack and category tints, and the ten creative archetypes. The
+archetypes are the largest remaining gap: this repo has three layout families
+where the brand has ten recurring structures.
+
+**Rejected.** The audit proposed a compliance linter built on a banned-substring
+list, raising a hard error with no severity taxonomy, no rule IDs, no
+provenance, and no evaluation. That is the design this project already argues
+against: a term list misses every paraphrase, and the red team walked a ranking
+claim past a regex by spacing it out. Its terms are worth folding in as
+additional layer-1 matchers; the gate stays two-layer, rule-cited and evaluated.
+
+Its "Meta 15-word rule" is also presented as platform policy. Meta's 20 percent
+text rule was retired around 2021, so this is a performance heuristic. It is
+implemented as `canvasWordLimit`, reported as a layout note, and never gates
+export. Labelling matters: that is `inference`, not `regulation`.
+
+**Corrected.** The audit's clinical percentages were transposed against the live
+pages, attaching the larger number to the more aggressive claim. Checking it
+against ours found a worse error in ours. See `docs/CORRECTIONS.md` C-006.
 
 ## How A and B connect: gate
 

@@ -32,10 +32,17 @@ source is the brand's own copy, a regulation, or our inference.
 
 ## The two surfaces
 
-**Generate** (`/`). A product URL in, a scored 1080x1080 creative out. The page
-is fetched server-side, parsed into `ProductFacts` with no model involved, and
-every claim in the generated copy must trace to a field in those facts. The
-creative self-scores before it renders.
+**Generate** (`/`). A product URL in, scored creatives out across the placements
+you pick. The page is fetched server-side, parsed into `ProductFacts` with no
+model involved, and every claim in the generated copy must trace to a field in
+those facts. Each creative self-scores before it renders.
+
+Placements are formats, not sizes. A Meta feed ad is scrolled past, so it keeps
+under 15 words on the canvas and moves the argument into the caption. An 11:16
+PDP listing image is studied by someone already zoomed in, so it runs long. Copy
+is written and scored per placement, never rescaled from one master, because
+substantiation costs words and the short formats are where evidence gets
+squeezed out.
 
 **Review** (`/review`). Paste any ad. Each finding carries the rule ID, the
 exact words it objects to, why, and what to do instead.
@@ -116,8 +123,8 @@ have no span to verify and a reviewer should weight them differently.
 | `npm run dev` | App on :3000 |
 | `npm run eval` | Score the labelled set, print confusion matrix and per-rule breakdown |
 | `npm run redteam` | Adversarial round: generate attack ads, score, log survivors |
-| `npm run generate -- <url>` | The generator, headless. `--angle`, `--background generated`, `--out bg.jpg` |
-| `npm test` | Extraction, gate and citation checks. Offline, no API key |
+| `npm run generate -- <url>` | The generator, headless. `--placements`, `--angle`, `--background generated` |
+| `npm test` | Extraction, gate, citation and registry checks. Offline, no API key |
 | `npm run snapshot` | Refresh the committed product snapshots |
 
 ## Layout
@@ -126,9 +133,10 @@ have no span to verify and a reviewer should weight them differently.
 standard/          the product: rules, sources, substantiation registry
   claims.rules.yaml
   SOURCES.md
-  claims-registry.yaml
+  claims-registry.yaml   19 claims, each verbatim-checked against a real page
+  disclosures.yaml       text that must appear ON the creative
 lib/scorer/        two-layer scorer, prompts assembled from standard/
-lib/generator/     fetch, extract, copy, background, gate
+lib/generator/     fetch, extract, copy, background, gate, placements
 eval/dataset.jsonl 29 labelled ads, including hard negatives
 docs/              decisions, failure modes, design record, corrections
 fixtures/          committed product snapshots and parser fixtures
