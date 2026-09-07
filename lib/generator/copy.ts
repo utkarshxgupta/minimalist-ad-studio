@@ -1,6 +1,7 @@
 import { GoogleGenAI } from "@google/genai";
 import { AdCopy, type ClaimTrace, type ProductFacts } from "@/lib/types";
-import { buildCopyPrompt, factsBlock, COPY_SCHEMA, type Brief } from "./prompt";
+import { registryDigestFor } from "@/lib/standard/loader";
+import { buildCopyPrompt, factsBlock, COPY_SCHEMA, type Brief, type Mode } from "./prompt";
 import { canvasWordCount, fieldsFor, type CopyField, type Placement } from "./placements";
 
 /**
@@ -29,14 +30,15 @@ export async function generateCopy(
   facts: ProductFacts,
   placement: Placement,
   brief: Brief = {},
-  avoid: string[] = []
+  avoid: string[] = [],
+  mode: Mode = "photographic"
 ): Promise<CopyResult> {
   if (!process.env.GEMINI_API_KEY) {
     throw new CopyError("GEMINI_API_KEY is not set, so no copy can be generated.");
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  const prompt = buildCopyPrompt(facts, placement, brief, avoid);
+  const prompt = buildCopyPrompt(facts, placement, brief, avoid, mode);
 
   let lastError = "";
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -57,14 +59,14 @@ export async function generateCopy(
         continue;
       }
 
-      // A field this placement does not use is blanked rather than trusted to be
-      // empty. The model is told to leave it alone; the artboard should not
-      // depend on it having listened.
-      const copy = clearUnusedFields(parsed.data, placement);
+      // A field this placement or this mode does not use is blanked rather
+      // than trusted to be empty. The model is told to leave it alone; the
+      // artboard should not depend on it having listened.
+      const copy = clearUnusedFields(parsed.data, placement, mode);
 
       return {
         copy,
-        ungrounded: verifyClaimTrace(facts, copy),
+        ungrounded: [...verifyClaimTrace(facts, copy), ...verifyStatBadge(facts, copy)],
         overLength: overLengthFields(copy, placement),
         model: COPY_MODEL,
       };
@@ -81,30 +83,62 @@ export async function generateCopy(
 
 const ALL_FIELDS: CopyField[] = ["headline", "subhead", "body", "cta", "footnote"];
 
-function clearUnusedFields(copy: AdCopy, placement: Placement): AdCopy {
+function clearUnusedFields(copy: AdCopy, placement: Placement, mode: Mode): AdCopy {
   const used = new Set(fieldsFor(placement));
   const out = { ...copy };
   for (const f of ALL_FIELDS) if (!used.has(f)) out[f] = "";
   if (!placement.hasCaption) out.caption = "";
+
+  // Photographic mode gets no checklist and no stat badge regardless of what
+  // the model returned. The prompt already says so; this is the check, not
+  // the instruction.
+  if (mode !== "creative") {
+    out.checklist = [];
+    out.statBadge = {};
+  }
   return out;
 }
 
 /**
- * The text the scorer sees.
+ * The text the scorer sees, and the text a claim trace entry is checked
+ * against for presence.
  *
  * The caption is included deliberately. On a Meta placement the caption is
  * where the actual argument gets made, so scoring only the canvas would check
- * the six words nobody reads closely and ignore the paragraph making the claim.
+ * the six words nobody reads closely and ignore the paragraph making the
+ * claim. The checklist and stat badge are included for the same reason: they
+ * are rendered on the creative, so a claim living only in a checklist bullet
+ * has to be checkable exactly like a claim in the body copy.
  */
 export function adText(copy: AdCopy): string {
-  return [copy.headline, copy.subhead, copy.body, copy.cta, copy.footnote, copy.caption]
+  return [
+    copy.headline,
+    copy.subhead,
+    copy.body,
+    copy.cta,
+    copy.footnote,
+    copy.caption,
+    ...copy.checklist,
+    copy.statBadge?.value ?? "",
+    copy.statBadge?.label ?? "",
+  ]
     .filter(Boolean)
     .join("\n");
 }
 
 /** Just what is rendered on the image. Used for the canvas word budget. */
 export function canvasText(copy: AdCopy): string {
-  return [copy.headline, copy.subhead, copy.body, copy.cta].filter(Boolean).join("\n");
+  return [
+    copy.headline,
+    copy.subhead,
+    copy.body,
+    copy.cta,
+    ...copy.checklist,
+    copy.statBadge?.value ?? "",
+    copy.statBadge?.label ?? "",
+  ]
+    .filter(Boolean)
+    .join("\n");
 }
 
 function normalise(s: string): string {
@@ -154,6 +188,26 @@ export function verifyClaimTrace(facts: ProductFacts, copy: AdCopy): ClaimTrace[
     const present = t.claim.trim().length > 0 && written.includes(normalise(t.claim));
     return !supported || !present;
   });
+}
+
+/**
+ * A stat badge is the highest-visibility element on a creative-mode ad, a
+ * bordered call-out that reads as verified. So it gets a stricter check than
+ * an ordinary claim: grounded specifically against the studies registered for
+ * THIS product, not the general facts haystack. This is the same class of
+ * error C-006 was, an eye-catching number attached to the wrong product, and
+ * a stat badge is exactly the shape that mistake takes on a finished ad.
+ */
+export function verifyStatBadge(facts: ProductFacts, copy: AdCopy): ClaimTrace[] {
+  const value = copy.statBadge?.value?.trim();
+  const label = copy.statBadge?.label?.trim();
+  if (!value && !label) return [];
+
+  const registry = normalise(registryDigestFor(facts.name));
+  const claim = [value, label].filter(Boolean).join(" ");
+  const grounded = (value ? registry.includes(normalise(value)) : true) && registry.length > 0;
+
+  return grounded ? [] : [{ claim: `stat badge: ${claim}`, supportedBy: "" }];
 }
 
 function overLengthFields(copy: AdCopy, placement: Placement): string[] {

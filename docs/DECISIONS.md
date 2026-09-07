@@ -28,8 +28,11 @@ Two surfaces over one rulebook.
 
 **Generate.** A product URL in, scored creatives out across four placements in
 two channels. The page is fetched server-side, parsed into `ProductFacts`, copy
-is generated against those facts and nothing else, a background is generated and
-scored, and each creative self-scores before it renders.
+is generated against those facts and nothing else, and each creative self-scores
+before it renders. The default path calls no image model: the real photo is
+composited onto a flat brand canvas. An opt-in creative mode adds a benefit
+checklist, a registry-backed stat badge, and one generated prop graphic, checked
+for containing anything resembling the product's own container before it is used.
 
 **Review.** Paste any ad. Every finding cites a rule ID, quotes the exact words
 it objects to, says why, and says what to do instead.
@@ -141,9 +144,63 @@ the convenient omission.
 
 The pack, the label and the printed concentration are photographic. A generated
 label is a fabricated fact about a real product, which is the same offence as a
-fabricated claim and harder to spot. Only the environment behind it is generated,
-and generated environments are scored, because a backdrop of dewy glowing skin is
-an efficacy claim made in pixels instead of words.
+fabricated claim and harder to spot. The default path composites the real photo
+onto a flat brand canvas and calls no image model at all; the opt-in creative
+mode adds one small generated prop graphic beside the product, never behind or
+in place of it, and the prop is checked for containing anything resembling the
+product's own container before it is used.
+
+*Revised.* The first version of this decision generated a full photoreal
+backdrop and composited the product over it with a feathered edge. Two
+independently generated photographs do not share a light source or a colour
+temperature, and the mismatch read as a visible seam no amount of feathering
+hid. A flat canvas cannot produce that seam, so the fix removed the second
+photograph rather than trying to blend it better.
+
+### Layout is data, and it is tested
+
+Every box position, the product's, the copy column's, the creative-mode prop's,
+lives in one module the renderer and the tests both import, rather than as
+inline styles nobody could assert against. Checked for: the product never
+touching the canvas edge, a Story clearing Instagram's own UI safe zones, and
+the prop never overlapping the product.
+
+This exists because two real defects shipped past every test that existed
+before it. `object-fit: cover` forcing a portrait bottle into a landscape box
+cropped the cap off; a prop sized and centred on the product's own box landed
+directly behind the opaque photo on the placement where the product fills 82
+percent of the frame, and rendered as nothing. Both were caught by looking at
+the actual output on a direct report that it did not look publication-ready,
+not by anything in this codebase noticing on its own. The gate had a
+verification discipline for claims and had never applied the same discipline
+to whether the resulting image was legible.
+
+*Rejected:* leaving layout as inline JSX styles and relying on visual review
+before each release. Visual review is exactly what missed both bugs the first
+time; a rectangle-overlap assertion does not get tired of looking.
+
+### Creative mode adds what the brand's own banners actually contain
+
+The instruction was to feed the product photo to an image model and push past
+a plain product-and-text format, pointing at the brand's homepage banners.
+Read literally that sounds like painted scenes; the banners themselves are not
+that. Every one is the same template — kicker, headline, divider, a benefit
+checklist, a CTA — beside real product photography with a *small* prop, a
+molecule motif, a scatter of glass droplets, on a near-flat canvas. So creative
+mode adds a checklist, a registry-backed stat badge, and one generated prop,
+never a generated environment.
+
+The product photo does go to the image model, as asked, as a reference for
+scale and colour, with the prompt repeatedly forbidding it from drawing the
+product itself, and that instruction is checked rather than trusted: the model
+is asked directly whether its own output resembles a bottle, tube, jar or
+dropper, and the prop is discarded if so.
+
+*Rejected, deliberately:* a generated testimonial card, despite the reference
+banners having one. Inventing a reviewer's name and words is a fabricated
+testimonial regardless of how the copy reads, which is precisely what
+`POLICY-009` and `POLICY-010` exist to catch. The component is there for a
+marketer to fill in with a real quote; the generator does not write one.
 
 ### Fail closed
 
@@ -205,15 +262,15 @@ a regex, and to add the attack to the eval set as a regression row.
 The attacker and the scorer are the same model family, so their blind spots
 correlate. **This measures gameability, not safety.**
 
-**Corrections.** Six logged in `docs/CORRECTIONS.md`, including two regulatory
-citations that were confidently wrong before verification, one rule that cited an
-internal document which did not exist, and one substantiation claim filed against
-the wrong product. That last one is the instructive failure: POLICY-012 answers
-"is the cited study one of ours", so a misfiled entry does not fail loudly, it
-certifies an ad making a claim that product has never made. The rule verified ad
-copy against the registry and nothing verified the registry against reality.
-`npm run test:registry` now does, and the registry carries 19 entries each
-checked verbatim against a real product page. A tool that judges other people's
+**Corrections.** Eight logged in `docs/CORRECTIONS.md`, including two regulatory
+citations that were confidently wrong before verification, a substantiation claim
+filed against the wrong product, and two compositing defects reported by the user
+after this session's own review had called the same code correct: a product photo
+cropped out of frame, a generated backdrop that produced a visible seam, and a
+badge that wrapped in the export but not the preview. A follow-up fix for the
+first repeated the pattern at smaller scale, self-caught this time: a prop graphic
+placed behind the opaque product photo, invisible, verified only by re-looking at
+the actual render rather than trusting the previous fix's own test suite. A tool that judges other people's
 claims should be able to show its own error rate.
 
 Twelve known weaknesses are written down in `docs/FAILURE-MODES.md`. The one
@@ -225,22 +282,29 @@ page overclaims, grounded generation reproduces the overclaim. A PASS means
 
 ## What I would do next, in order
 
-1. **Build the creative archetypes.** An external audit of the brand's asset
+1. **Extend the geometry checks from layout to legibility.** The tests added
+   this session assert non-overlapping rectangles; they do not assert that text
+   fits its box, that contrast holds against whatever sits behind it, or that a
+   font actually loaded before an export was taken. Two real defects shipped
+   because nothing checked geometry at all; the geometry checks that exist now
+   are a first pass, not a complete one.
+2. **Build the creative archetypes.** An external audit of the brand's asset
    library identified ten recurring creative structures. This repo has three
-   layout families. That is the largest single gap between what it produces and
-   what the brand actually ships.
-2. **Get 50 real ads from the brand's archive.** The tone and language rules were
+   layout families plus creative mode's checklist and stat badge. That is
+   still the largest single gap between what it produces and what the brand
+   actually ships.
+3. **Get 50 real ads from the brand's archive.** The tone and language rules were
    derived from product pages because ad copy could not be obtained. Those are
    different registers, and a rulebook built on the wrong one is systematically
    lenient about the exact failure it exists to catch.
-3. **Close the grounding gap in the standard.** Invariant 4 is enforced by rule
+4. **Close the grounding gap in the standard.** Invariant 4 is enforced by rule
    only for concentrations. A benefit claim absent from `ProductFacts` is
    currently a generation warning, not a finding. That rule should exist, and
    adding it needs the eval run either side.
-4. **Give the registry an owner.** `standard/claims-registry.yaml` is populated
+5. **Give the registry an owner.** `standard/claims-registry.yaml` is populated
    from what product pages state, not from study reports. Until whoever holds the
    studies owns it, POLICY-012 will produce false positives on real claims.
-5. **Image input on the review surface.** Real ads are pictures, and the tool
+6. **Image input on the review surface.** Real ads are pictures, and the tool
    currently reads text.
-6. **An independent red team.** A different model family, so the blind spots stop
+7. **An independent red team.** A different model family, so the blind spots stop
    correlating.

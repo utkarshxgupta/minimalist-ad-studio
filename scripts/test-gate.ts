@@ -14,9 +14,17 @@ import { check, checkAsync, eq, ok, report } from "./assert";
 import type { AdCopy, Finding, ProductFacts, ScoreResult, Verdict } from "../lib/types";
 import { scoreAd } from "../lib/scorer";
 import { avoidList, chooseBest, decide, shouldRetry, MAX_WARN_RETRIES, type Attempt } from "../lib/generator/gate";
-import { verifyClaimTrace, adText } from "../lib/generator/copy";
-import { sanitiseHint, buildBackgroundPrompt } from "../lib/generator/background";
+import { verifyClaimTrace, verifyStatBadge, adText } from "../lib/generator/copy";
+import { sanitiseHint, buildPropPrompt } from "../lib/generator/creative";
 import { PLACEMENT_LIST, canvasWordCount, fieldsFor, placement } from "../lib/generator/placements";
+import {
+  geometryFor,
+  hasMargin,
+  clearsStorySafeZone,
+  overlaps,
+  propAccentFor,
+  MIN_MARGIN,
+} from "../lib/generator/artboard-geometry";
 
 const FACTS: ProductFacts = {
   url: "https://beminimalist.co/products/salicylic-acid-2",
@@ -59,7 +67,17 @@ function score(verdict: Verdict, findings: Finding[] = [], failed: ScoreResult["
 function attempt(over: Partial<Attempt> = {}): Attempt {
   return {
     index: 0,
-    copy: { headline: "h", subhead: "s", body: "b", cta: "c", footnote: "", caption: "", claimTrace: [] },
+    copy: {
+      headline: "h",
+      subhead: "s",
+      body: "b",
+      cta: "c",
+      footnote: "",
+      caption: "",
+      checklist: [],
+      statBadge: {},
+      claimTrace: [],
+    },
     score: score("PASS"),
     ungrounded: [],
     overLength: [],
@@ -160,7 +178,17 @@ check("ties go to the earlier attempt", () => {
 // --- Claim grounding -------------------------------------------------------
 
 function copyWith(trace: AdCopy["claimTrace"], body = "Reduces Acne, Blackheads & Excessive Oil"): AdCopy {
-  return { headline: "Clear skin, earned", subhead: "", body, cta: "Shop Now", footnote: "", caption: "", claimTrace: trace };
+  return {
+    headline: "Clear skin, earned",
+    subhead: "",
+    body,
+    cta: "Shop Now",
+    footnote: "",
+    caption: "",
+    checklist: [],
+    statBadge: {},
+    claimTrace: trace,
+  };
 }
 
 check("a claim traced to real page text verifies", () => {
@@ -202,9 +230,9 @@ check("the scored text is exactly what the artboard shows", () => {
   eq(adText(copy), "Clear skin, earned\nReduces Acne, Blackheads & Excessive Oil\nShop Now", "ad text");
 });
 
-// --- Background layer 1 ----------------------------------------------------
+// --- Creative-mode prop, layer 1 --------------------------------------------
 
-check("a hostile background hint is stripped before it reaches an image model", () => {
+check("a hostile prop hint is stripped before it reaches an image model", () => {
   const s = sanitiseHint("dewy glowing skin close up, before and after transformation, clinical lab");
   eq(s.hint.includes("skin"), false, "skin removed");
   eq(s.hint.includes("glowing"), false, "glow removed");
@@ -212,16 +240,94 @@ check("a hostile background hint is stripped before it reaches an image model", 
   ok(s.rejected.every((r) => r.why.length > 0), "every rejection says why");
 });
 
-check("an innocent hint survives", () => {
-  const s = sanitiseHint("warm terracotta ledge, soft morning light");
-  eq(s.rejected, [], "nothing to reject");
-  eq(s.hint, "warm terracotta ledge, soft morning light", "hint intact");
+check("a badge/seal hint is stripped too", () => {
+  // A generated certification seal is a fabricated credential, the same
+  // failure class as a fabricated testimonial.
+  const s = sanitiseHint("add a dermatologist approved badge and an award seal");
+  ok(s.rejected.some((r) => /badge|seal|award/i.test(r.phrase)), "badge language rejected");
 });
 
-check("the background prompt always forbids the product and people", () => {
-  const p = buildBackgroundPrompt(FACTS, "");
-  for (const forbidden of ["no people", "no skin", "no product", "no text"]) {
+check("an innocent hint survives", () => {
+  // "droplets" is deliberately not innocent: it is on the deny-list as a
+  // moisture cue, so a genuinely innocent example has to avoid it too.
+  const s = sanitiseHint("warm afternoon light, a soft matte surface");
+  eq(s.rejected, [], "nothing to reject");
+  eq(s.hint, "warm afternoon light, a soft matte surface", "hint intact");
+});
+
+check("the prop prompt refuses to draw the product, repeatedly and explicitly", () => {
+  const p = buildPropPrompt(FACTS, "");
+  for (const forbidden of ["DO NOT depict", "no people", "no product", "bottle, tube, jar", "PURE WHITE"]) {
     ok(p.includes(forbidden), `prompt should say "${forbidden}"`);
+  }
+});
+
+// --- Claim grounding, creative-mode elements --------------------------------
+
+check("a checklist item is grounded the same way a claim is, via the trace", () => {
+  const copy = { ...copyWith([]), checklist: ["Reduces Acne, Blackheads & Excessive Oil"] };
+  // adText includes the checklist, so a claimTrace entry pointing at it can verify.
+  ok(adText(copy).includes("Reduces Acne, Blackheads & Excessive Oil"), "checklist item is scoreable text");
+});
+
+check("a stat badge matching this product's real registry entry is grounded", () => {
+  // FACTS is Salicylic Acid 2% Face Serum, which SUB-002 in the real registry
+  // backs with "93% subjects saw significant reduction in active acne".
+  const copy = { ...copyWith([]), statBadge: { value: "93%", label: "reduction in active acne" } };
+  eq(verifyStatBadge(FACTS, copy), [], "a real, registered figure for this product should verify");
+});
+
+check("a stat badge for a product with no registry entry is rejected", () => {
+  const noStudy: ProductFacts = { ...FACTS, name: "A Product With No Registered Studies" };
+  const copy = { ...copyWith([]), statBadge: { value: "99%", label: "made up" } };
+  // Absence of registry data means absence of a badge, never a guess.
+  eq(verifyStatBadge(noStudy, copy).length, 1, "no registry entry for this product, so ungrounded");
+});
+
+check("an empty stat badge needs no grounding", () => {
+  eq(verifyStatBadge(FACTS, copyWith([])).length, 0, "nothing to check");
+});
+
+// --- Artboard geometry -------------------------------------------------------
+
+check("the product never touches the canvas edge, on any layout", () => {
+  for (const p of PLACEMENT_LIST) {
+    const geo = geometryFor(p);
+    ok(hasMargin(geo.product, MIN_MARGIN), `${p.id} product box: ${JSON.stringify(geo.product)}`);
+  }
+});
+
+check("the copy column stays within the canvas on every layout", () => {
+  for (const p of PLACEMENT_LIST) {
+    const geo = geometryFor(p);
+    ok(
+      geo.copy.x >= 0 && geo.copy.y >= 0 && geo.copy.x + geo.copy.w <= 1.0001 && geo.copy.y + geo.copy.h <= 1.0001,
+      `${p.id} copy box: ${JSON.stringify(geo.copy)}`
+    );
+  }
+});
+
+check("a Story clears Instagram's own UI safe zones", () => {
+  // Regression: an earlier layout ran ink to y=1910 on a 1920 canvas, straight
+  // through the zone Instagram overlays with the caption and reply bar.
+  const geo = geometryFor(placement("meta_story_9x16"));
+  ok(clearsStorySafeZone(geo.product), `product box intrudes on the safe zone: ${JSON.stringify(geo.product)}`);
+  ok(clearsStorySafeZone(geo.copy), `copy box intrudes on the safe zone: ${JSON.stringify(geo.copy)}`);
+});
+
+check("the creative-mode prop never sits behind the product, on any layout", () => {
+  // Regression: the first version centred a large prop on the product box.
+  // On the split (square) layout, where the product fills up to 82 percent
+  // of the canvas, that put the prop's own graphic directly behind the
+  // opaque product photo. It rendered as nothing, because a prop hidden
+  // behind an opaque photo is invisible and only its blank white margin
+  // showed elsewhere, which multiplies away to nothing too. Caught by
+  // looking at an actual render, not by reasoning about the layout math.
+  for (const p of PLACEMENT_LIST) {
+    const product = geometryFor(p).product;
+    const prop = propAccentFor(p);
+    ok(!overlaps(product, prop), `${p.id}: prop ${JSON.stringify(prop)} overlaps product ${JSON.stringify(product)}`);
+    ok(hasMargin(prop, MIN_MARGIN), `${p.id}: prop box itself should clear the canvas edge too`);
   }
 });
 

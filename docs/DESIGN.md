@@ -220,6 +220,76 @@ export. Labelling matters: that is `inference`, not `regulation`.
 pages, attaching the larger number to the more aggressive claim. Checking it
 against ours found a worse error in ours. See `docs/CORRECTIONS.md` C-006.
 
+### Build notes, the compositing rewrite and creative mode
+
+A user report that exported creatives did not look publication-ready, with
+the product clipped out of frame and a visible seam behind it, was correct on
+both counts. Neither was a tuning problem.
+
+**The seam was architectural, not aesthetic.** The prior version generated a
+full photoreal backdrop and composited the product photo over it with a
+feathered edge, on the assumption that feathering hides a boundary. It hides
+the boundary; it does not give two independently generated photographs a
+shared light source or colour temperature, and the mismatch read as a visible
+seam regardless of how the edge was treated. The fix removes the second
+photograph rather than blending it better: the default (photographic) path
+composites the real product photo onto a flat brand canvas token and calls no
+image model at all. A flat colour cannot have a seam.
+
+**The clipping was `object-fit: cover` doing exactly what it is told.** A
+1100x1600 portrait product photo forced into a short landscape box, to fill
+it edge to edge, crops whatever does not fit; for these products that was
+routinely the cap or the base. Switched to `object-fit: contain` everywhere,
+which cannot clip, at the cost of a smaller product with margin around it,
+which is also what the brand's own packshots look like: fully contained, never
+bled to the frame edge.
+
+**Both were caught late because nothing checked geometry.** The gate checks
+claims and policy; nothing checked whether the resulting layout was legible.
+`lib/generator/artboard-geometry.ts` now holds every box position as data,
+imported by both the renderer and the tests, and is checked for containment,
+margin, and (for Stories) clearing Instagram's own UI safe zones.
+
+**Creative mode was scoped from what the brand's real banners contain, not
+from what "AI ad creativity" usually means.** The request was to feed the
+product photo to an image model and push past a plain product-plus-text
+format, referencing the brand's own homepage banners. Looking at those
+banners rather than assuming: they are not painted scenes either. Each one is
+the same template — a kicker, a headline, a divider, a benefit checklist with
+checkmarks, a CTA — beside real product photography with a *small* physical
+or graphic prop (a molecule motif woven through hair, a scatter of glass
+droplets), on a near-flat canvas, occasionally a stat badge or a testimonial
+card. So creative mode adds exactly those elements: a checklist, a
+registry-backed stat badge, and one generated prop graphic, never a generated
+environment.
+
+**The product photo is given to the image model, honouring the letter of the
+request, inside the boundary invariant 5 requires.** It rides along as a
+reference image so the model can match scale and colour, with the prompt
+repeatedly and explicitly forbidding the model from depicting the product
+itself. That instruction is checked, not trusted: layer 2 asks the model
+directly whether its own output contains anything resembling a bottle, tube,
+jar, or dropper, and the prop is discarded outright if so. An instruction is
+not a control in this codebase, on either surface.
+
+**No testimonial card, even though the reference banners have one.** A
+testimonial needs a real reviewer's name and real words. A model asked to
+supply both is inventing a customer, which is a fabricated testimonial no
+matter how the copy reads, and `POLICY-009`/`POLICY-010` exist for exactly
+this failure mode. The component exists for a marketer to paste a real quote
+into by hand; the generator does not write one.
+
+**The prop hid behind the product on first render, for the same reason the
+photo used to clip.** Sized and centred on the product's own box under the
+assumption that it would read as surrounding the bottle, it landed directly
+underneath the opaque product photo on the square placement, where the
+product occupies up to 82 percent of the frame: invisible, with only its
+blank white margin showing elsewhere, which multiplies away to nothing. Fixed
+by deriving the prop's position from the same geometry module, placed beside
+the product rather than behind it, with a test asserting the two boxes never
+overlap on any placement. Caught, again, by looking at the render rather than
+the layout math.
+
 ## How A and B connect: gate
 
 The generator self-scores before it renders. A BLOCK-severity claims finding

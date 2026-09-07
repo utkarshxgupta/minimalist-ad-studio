@@ -128,9 +128,45 @@ findings carry a description instead and are tagged `target: "image"` so a
 reviewer weights them differently, but the guarantee genuinely does not hold
 there.
 
-The deny-list that runs over the background hint before generation is a word
-list, so a paraphrase gets through it. It is a cheap filter in front of an
+The deny-list that runs over the marketer's style hint before generation is a
+word list, so a paraphrase gets through it. It is a cheap filter in front of an
 expensive call, not a control.
+
+---
+
+## 8b. Creative mode's compositing has no rendered-layout check
+
+Everything the deterministic scorer verifies is verified against the text or
+the pixels of a generated image. Nothing verifies that the *composed* creative
+is legible: that the product is inside the frame, that a caption clears a
+platform's own safe zones, that a decorative prop does not end up hidden
+behind an opaque photo.
+
+That last one happened. The first version of the creative-mode prop was sized
+and centred on the product's own bounding box, on the theory that it would
+read as a motif surrounding the bottle. On the square placement, where the
+product box fills up to 82 percent of the canvas, that put the prop's actual
+graphic content directly behind the opaque product photo: invisible, because
+a decoration behind an opaque photo is invisible, and only the prop's own
+blank white margin showed elsewhere, which multiplies away to nothing against
+a light canvas. It shipped, passed every existing test, and rendered as an
+empty flat panel. Caught by looking at the actual output, not by reasoning
+about the position math, in response to a direct report that the generated
+images did not look publication-ready.
+
+**What now exists.** `lib/generator/artboard-geometry.ts` is the one place
+box positions are computed, imported by both the component that renders them
+and the tests that check them, so the two cannot silently disagree. It is
+checked for: the product never touching the canvas edge, the copy column
+staying in bounds, a Story clearing Instagram's own UI safe zones, and the
+prop accent never overlapping the product box, on every placement.
+
+**What this still does not cover.** The checks are geometric, not visual: they
+assert non-overlapping rectangles, not "this looks good." A layout could pass
+every one of these and still be an ugly composition. Font rendering, text
+overflow within a box, and colour contrast between the copy and whatever sits
+behind it are unchecked. The gate this session added catches wrong; it does
+not yet catch merely mediocre.
 
 ---
 

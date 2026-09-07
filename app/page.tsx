@@ -7,11 +7,18 @@ import { FindingList, HighlightedCopy } from "@/components/Findings";
 import { ScorePanel, VerdictBadge } from "@/components/Verdict";
 import { CATALOGUE, productUrl } from "@/lib/generator/catalogue";
 import { DEFAULT_PLACEMENT, PLACEMENT_LIST, type PlacementId } from "@/lib/generator/placements";
-import type { GenerationRun, PlacementRun } from "@/lib/generator";
+import type { GenerationRun, Mode, PlacementRun } from "@/lib/generator";
 import { decide } from "@/lib/generator/gate";
 import { logOverride, readOverrides, type OverrideEntry } from "@/lib/overrides";
 
-function adText(copy: { headline: string; subhead: string; body: string; cta: string; footnote: string; caption: string }): string {
+function adText(copy: {
+  headline: string;
+  subhead: string;
+  body: string;
+  cta: string;
+  footnote: string;
+  caption: string;
+}): string {
   return [copy.headline, copy.subhead, copy.body, copy.cta, copy.footnote, copy.caption].filter(Boolean).join("\n");
 }
 
@@ -20,7 +27,7 @@ export default function GeneratePage() {
   const [angle, setAngle] = useState("");
   const [audience, setAudience] = useState("");
   const [placements, setPlacements] = useState<PlacementId[]>([DEFAULT_PLACEMENT]);
-  const [backgroundMode, setBackgroundMode] = useState<"generated" | "plain">("generated");
+  const [mode, setMode] = useState<Mode>("photographic");
   const [hint, setHint] = useState("");
 
   const [busy, setBusy] = useState(false);
@@ -48,7 +55,7 @@ export default function GeneratePage() {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url, angle, audience, placements, background: backgroundMode, backgroundHint: hint }),
+        body: JSON.stringify({ url, angle, audience, placements, mode, propHint: hint }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
@@ -65,16 +72,13 @@ export default function GeneratePage() {
 
   const current: PlacementRun | undefined = run?.placements[active];
   const attempt = current?.attempts[shown];
-  const background = current?.background
-    ? `data:${current.background.mimeType};base64,${current.background.data}`
-    : undefined;
+  const propImage = run?.prop ? `data:${run.prop.mimeType};base64,${run.prop.data}` : undefined;
 
   // Recomputed for the attempt actually on screen, not taken from the run. The
   // marketer can page back to an earlier attempt, and a gate that describes a
   // different creative than the one being looked at is worse than no gate.
   const decision = attempt ? decide(attempt) : null;
-  const canExport =
-    decision?.export === "free" || (decision?.export === "override" && reason.trim().length >= 12);
+  const canExport = decision?.export === "free" || (decision?.export === "override" && reason.trim().length >= 12);
 
   async function exportPng() {
     if (!board.current || !run || !current || !attempt) return;
@@ -90,6 +94,13 @@ export default function GeneratePage() {
       });
       setOverrides(readOverrides());
     }
+
+    // html-to-image clones the DOM for capture before webfonts are guaranteed
+    // ready, which once let the export compute a different text width than the
+    // live preview and wrap a badge that was one line on screen. Waiting here
+    // closes that race; nowrap on single-line elements in the Artboard closes
+    // it a second way, so the two do not depend on each other to be enough.
+    await document.fonts.ready;
 
     const png = await toPng(board.current, {
       width: current.placement.width,
@@ -188,27 +199,35 @@ export default function GeneratePage() {
         </div>
 
         <fieldset className="border border-line bg-card p-3">
-          <legend className="label px-1">Background</legend>
+          <legend className="label px-1">Mode</legend>
           <div className="flex gap-4 text-sm">
-            {(["generated", "plain"] as const).map((mode) => (
-              <label key={mode} className="flex items-center gap-1.5">
-                <input type="radio" checked={backgroundMode === mode} onChange={() => setBackgroundMode(mode)} />
-                {mode}
+            {(["photographic", "creative"] as const).map((m) => (
+              <label key={m} className="flex items-center gap-1.5">
+                <input type="radio" checked={mode === m} onChange={() => setMode(m)} />
+                {m}
               </label>
             ))}
           </div>
-          {backgroundMode === "generated" && (
+
+          {mode === "photographic" ? (
+            <p className="mt-2 text-xs text-muted">
+              The real product photo on a flat brand canvas. No image model runs; nothing to generate
+              means nothing that can drift out of the frame or clash with the photo&apos;s own lighting.
+            </p>
+          ) : (
             <>
               <input
                 className="field mt-2"
-                placeholder="warm terracotta ledge, morning light"
+                placeholder="glass droplets, molecular motif..."
                 value={hint}
                 onChange={(e) => setHint(e.target.value)}
               />
               <p className="mt-2 text-xs text-muted">
-                The product photograph is never generated. Only the environment behind it is, at each
-                placement&apos;s own aspect ratio, and the result is scored: a backdrop of dewy glowing
-                skin is an efficacy claim made in pixels.
+                Adds one generated prop graphic beside the real product, plus a benefit checklist and a
+                registry-backed stat badge where one exists, the elements observed on the brand&apos;s
+                own homepage banners. The product photo is given to the image model only as a reference
+                for scale and colour; it is told, repeatedly, never to redraw the product itself, and
+                the result is checked for exactly that before it is used.
               </p>
             </>
           )}
@@ -250,6 +269,19 @@ export default function GeneratePage() {
                 {w}
               </p>
             ))}
+            {run.propError && <p className="mt-2 text-xs text-warn">Creative prop: {run.propError}</p>}
+            {run.prop && run.prop.hint.rejected.length > 0 && (
+              <div className="mt-2">
+                <div className="label">Prop hint, rejected terms</div>
+                <ul className="mt-1 space-y-0.5 text-xs text-muted">
+                  {run.prop.hint.rejected.map((r, i) => (
+                    <li key={i}>
+                      <span className="font-mono">{r.phrase}</span> {r.why}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 
@@ -295,7 +327,7 @@ export default function GeneratePage() {
                     copy={attempt.copy}
                     facts={run.facts}
                     placement={current.placement}
-                    background={background}
+                    propImage={propImage}
                     previewWidth={380}
                   />
                 ) : (
@@ -391,22 +423,6 @@ export default function GeneratePage() {
                     <ul className="mt-1 space-y-0.5 text-xs text-muted">
                       {attempt.overLength.map((o, i) => (
                         <li key={i}>{o}</li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-
-                {current.backgroundError && (
-                  <p className="text-xs text-warn">Background generation failed: {current.backgroundError}</p>
-                )}
-                {current.background && current.background.hint.rejected.length > 0 && (
-                  <div>
-                    <div className="label">Background hint, rejected terms</div>
-                    <ul className="mt-1 space-y-0.5 text-xs text-muted">
-                      {current.background.hint.rejected.map((r, i) => (
-                        <li key={i}>
-                          <span className="font-mono">{r.phrase}</span> {r.why}
-                        </li>
                       ))}
                     </ul>
                   </div>

@@ -178,3 +178,90 @@ from the registry reads as unsubstantiated. Twelve real claims were absent.
 as "a demonstration of the mechanism, not a complete registry", and that framing
 made it feel exempt from checking. Demonstrations get graded too, and a wrong
 example teaches the wrong thing.
+
+---
+
+## C-007: Exported creatives were not publication-ready, on the exact claim I had verified
+
+**Claimed.** The composited artboard had been checked: earlier in this session
+a live browser run showed a product photo cleanly contained on a flat backdrop,
+and I reported the seam bug from an earlier iteration fixed.
+
+**Actual, per the user's report and their own screenshots.** Three real defects
+were live in the shipped compositing: the product photo was cropped out of
+frame on several placements, the generated backdrop did not share a light
+source or colour temperature with the product photo and read as a visible
+seam, and an `SPF 50` pill badge wrapped its second line below its own border
+in the *exported* PNG while looking correct in the live preview.
+
+**How it was caught.** Not by me. The user attached three exported PNGs and
+asked for an honest audit against real Minimalist creative, rather than
+accepting my earlier "looks right" assessment. Measuring the actual pixels
+(R-minus-B colour temperature across the frame, an in-browser decode of the
+exported bytes) confirmed all three were real, not cosmetic.
+
+**Root causes, and why each survived earlier review.**
+
+1. Cropping was `object-fit: cover` forcing a 1100x1600 portrait photo into a
+   landscape box, which crops whatever does not fit the box's own aspect. It
+   had been visually checked at one placement (the 1:1 square) where the box
+   aspect happened to be close enough to the photo's that the crop was mild;
+   the 4:5 and 9:16 placements, checked less carefully, cropped the cap off.
+2. The seam was architectural: two independently generated photographs
+   (the real product photo and a generated photoreal backdrop) do not share a
+   light source, and feathering the edge between them hides the boundary, not
+   the mismatch.
+3. The pill wrap was a preview-versus-export divergence: `html-to-image`
+   clones the DOM for capture before webfonts are guaranteed ready, so the
+   clone can compute different text metrics than the live page did. I had
+   checked the live preview and never decoded an actual exported file.
+
+**Fix.** Not a patch to the existing approach. The generated backdrop was
+removed from the default path entirely, replaced with a flat brand-token
+canvas that cannot produce a colour seam because there is only one photograph
+in the frame. `object-fit: contain` replaced `cover` everywhere, which cannot
+clip. Single-line elements got `white-space: nowrap`, and the export path now
+awaits `document.fonts.ready` before capture. All three verified against the
+actual exported bytes, decoded in-browser via canvas, not the preview: correct
+dimensions, flat colour temperature across the whole frame, pill on one line.
+
+**What it says about verification in this project.** I had a real check
+(colour-temperature sampling, CDP export decoding) available and had used it
+successfully once already this session, and still reported the compositing
+fixed on visual impression alone at the next opportunity. The check existing
+in the toolbox is not the same as running it every time the claim is "this
+looks right."
+
+---
+
+## C-008: A geometry fix introduced the same failure it was fixing
+
+**Claimed.** After C-007, the creative-mode prop graphic was repositioned to
+sit "around" the product, verified by rendering the square placement and
+confirming the exported bytes were pixel-correct.
+
+**Actual.** The prop was sized and centred on the product's own bounding box.
+On the square placement specifically, where the product occupies up to 82
+percent of the canvas, that put the prop's own graphic content directly
+underneath the opaque product photo. It rendered as an empty flat panel: the
+prop was there, loaded, blending correctly, and completely invisible, because
+a decoration positioned behind an opaque photo is invisible regardless of how
+correctly everything else about it works.
+
+**How it was caught.** Self-caught, this time. Re-verifying the fix by looking
+at the actual composited render, the same discipline C-007 had just been about,
+rather than trusting that "the pill wraps correctly now" meant the whole
+composite was right.
+
+**Fix.** `propAccentFor` in `lib/generator/artboard-geometry.ts` derives the
+prop's box from the product's box on each layout, placed beside it with a
+verified gap rather than centred on top of it, sized to whatever room actually
+exists (a few percent of the frame on the tightest layout, meaningfully larger
+on the others). A test asserts the two boxes never overlap, on every
+placement, so this specific failure cannot silently return.
+
+**What it says.** Two compositing bugs in the same session, from the same
+underlying gap: nothing checked layout geometry, only claims and policy. That
+gap is now closed with data both the renderer and the tests read from the same
+module, but it took shipping the same class of bug twice, once past me, once
+past my own fix, to close it.

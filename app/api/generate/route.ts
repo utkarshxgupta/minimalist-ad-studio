@@ -20,8 +20,8 @@ const Body = z.object({
   placements: z
     .array(z.enum(["meta_feed_4x5", "meta_square_1x1", "meta_story_9x16", "pdp_listing_11x16"]))
     .optional(),
-  background: z.enum(["generated", "plain"]).optional(),
-  backgroundHint: z.string().optional(),
+  mode: z.enum(["photographic", "creative"]).optional(),
+  propHint: z.string().optional(),
 });
 
 export async function POST(req: Request) {

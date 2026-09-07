@@ -86,6 +86,22 @@ export function registryDigest(): string {
     .join("\n");
 }
 
+/**
+ * The registry, filtered to one product. Used wherever a prompt is generating
+ * copy for a specific product rather than surveying the whole brand: showing
+ * every product's studies invites exactly the mistake C-006 was, a model (or a
+ * hand) attaching one product's number to another's ad. Filtering the data the
+ * prompt can see is a structural fix, the same move `requires_facts` already
+ * makes for rules that need ProductFacts.
+ */
+export function registryDigestFor(productName: string): string {
+  const reg = loadRegistry();
+  const target = productName.trim().toLowerCase();
+  const mine = reg.claims.filter((c) => c.product.trim().toLowerCase() === target);
+  if (mine.length === 0) return "(no registered studies for this product)";
+  return mine.map((c) => `- ${c.id} | ${c.claim} | evidence: ${c.evidence}`).join("\n");
+}
+
 export interface Disclosure {
   id: string;
   applies_to: string;

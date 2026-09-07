@@ -1,10 +1,10 @@
 import type { Dimension, Finding, ProductFacts, ScoreResult } from "@/lib/types";
 import { computeVerdict, dimensionScores, scoreAd } from "@/lib/scorer";
-import { generateBackground, scoreBackground, type BackgroundResult } from "./background";
+import { generateCreativeProp, scoreCreativeProp, type PropResult } from "./creative";
 import { adText, generateCopy } from "./copy";
 import { getProductFacts, type FactsResult } from "./facts";
 import { avoidList, chooseBest, decide, shouldRetry, type Attempt, type GateDecision } from "./gate";
-import type { Brief } from "./prompt";
+import type { Brief, Mode } from "./prompt";
 import {
   DEFAULT_PLACEMENT,
   placement as getPlacement,
@@ -24,15 +24,21 @@ import {
  * separately rather than rescaled from a master. A Story has room for about six
  * words and substantiation does not fit in six words, so the short formats are
  * where evidence gets squeezed out. Sharing copy across them would hide that.
+ *
+ * Two modes. Photographic, the default, calls no image model at all: a flat
+ * brand canvas cannot produce the colour-temperature seam a generated
+ * backdrop did, because there is only one photograph in the frame. Creative is
+ * opt-in and adds one generated prop graphic, shared across every placement in
+ * the run, plus the checklist and stat-badge elements observed on the brand's
+ * own homepage banners.
  */
 
 export interface GenerationOptions extends Brief {
   /** Placements to produce. Defaults to the square feed unit. */
   placements?: PlacementId[];
-  /** Generated backdrop, or a flat brand surface composed in CSS. */
-  background?: "generated" | "plain";
-  /** Mood for the backdrop. Deny-list checked before it reaches an image model. */
-  backgroundHint?: string;
+  mode?: Mode;
+  /** Style direction for the creative-mode prop. Deny-list checked before it reaches an image model. */
+  propHint?: string;
 }
 
 /** One placement's worth of output: its attempt chain and its own gate decision. */
@@ -42,9 +48,6 @@ export interface PlacementRun {
   /** Index into `attempts` of the one to show. Not always the last. */
   chosen: number;
   decision: GateDecision;
-  /** The backdrop behind this placement, at this placement's aspect ratio. */
-  background?: BackgroundResult;
-  backgroundError?: string;
 }
 
 export interface GenerationRun {
@@ -55,6 +58,11 @@ export interface GenerationRun {
   factWarnings: string[];
   fallbackReason?: string;
 
+  mode: Mode;
+  /** The one generated prop, shared across every placement. Absent in photographic mode. */
+  prop?: PropResult;
+  propError?: string;
+
   placements: PlacementRun[];
   /** Campaign rollup, so a marketer sees the shape of the batch at a glance. */
   summary: { total: number; free: number; override: number; blocked: number };
@@ -62,30 +70,25 @@ export interface GenerationRun {
 
 export async function generateAd(url: string, opts: GenerationOptions = {}): Promise<GenerationRun> {
   const facts = await getProductFacts(url);
+  const mode: Mode = opts.mode ?? "photographic";
   const placements = (opts.placements?.length ? opts.placements : [DEFAULT_PLACEMENT]).map(getPlacement);
 
-  // One backdrop per distinct aspect ratio, not per placement. Two Meta units
-  // that share 1:1 share an image; a Story does not borrow a square one and get
-  // stretched. Image generation is the slowest and priciest call here by an
-  // order of magnitude, so the dedupe is worth the bookkeeping.
-  const backgrounds = new Map<string, Promise<BackgroundJob>>();
-  if (opts.background === "generated") {
-    for (const p of placements) {
-      if (backgrounds.has(p.imageAspect)) continue;
-      backgrounds.set(p.imageAspect, runBackground(facts.facts, opts.backgroundHint ?? "", p.imageAspect));
-    }
-  }
+  // One prop for the whole run, not one per placement. It is a small
+  // decorative graphic, not a per-aspect backdrop, so there is nothing to gain
+  // from generating it more than once, and image generation is the slowest
+  // and priciest call here by an order of magnitude.
+  const propJob = mode === "creative" ? runCreativeProp(facts.facts, opts.propHint ?? "") : Promise.resolve(null);
 
   const factsContext = JSON.stringify(facts.facts, null, 2);
 
-  // Placements run in parallel. They share nothing but the facts.
+  // Placements run in parallel. They share nothing but the facts and the mode.
   const runs = await Promise.all(
     placements.map(async (p): Promise<PlacementRun> => {
-      const attempts = await generateForPlacement(facts.facts, p, opts, factsContext);
-      const job = await (backgrounds.get(p.imageAspect) ?? Promise.resolve(null));
+      const attempts = await generateForPlacement(facts.facts, p, opts, factsContext, mode);
+      const job = await propJob;
 
-      // Image findings attach to every attempt, because the backdrop is the same
-      // behind all of them. A BLOCK in the backdrop blocks the creative whatever
+      // Prop findings attach to every attempt, because the prop is the same
+      // behind all of them. A BLOCK on the prop blocks the creative whatever
       // the copy says, which is the point of scoring it at all.
       const withImage = attempts.map((a) => ({
         ...a,
@@ -94,16 +97,11 @@ export async function generateAd(url: string, opts: GenerationOptions = {}): Pro
 
       const chosen = chooseBest(withImage);
 
-      return {
-        placement: p,
-        attempts: withImage,
-        chosen,
-        decision: decide(withImage[chosen]),
-        background: job?.bg,
-        backgroundError: job?.error,
-      };
+      return { placement: p, attempts: withImage, chosen, decision: decide(withImage[chosen]) };
     })
   );
+
+  const propOutcome = await propJob;
 
   return {
     facts: facts.facts,
@@ -111,6 +109,9 @@ export async function generateAd(url: string, opts: GenerationOptions = {}): Pro
     fetchedAt: facts.fetchedAt,
     factWarnings: facts.warnings,
     fallbackReason: facts.fallbackReason,
+    mode,
+    prop: propOutcome?.prop,
+    propError: propOutcome?.error,
     placements: runs,
     summary: {
       total: runs.length,
@@ -126,14 +127,15 @@ async function generateForPlacement(
   facts: ProductFacts,
   p: Placement,
   opts: GenerationOptions,
-  factsContext: string
+  factsContext: string,
+  mode: Mode
 ): Promise<Attempt[]> {
   const attempts: Attempt[] = [];
   let avoid: string[] = [];
   let retriesUsed = 0;
 
   for (;;) {
-    const result = await generateCopy(facts, p, opts, avoid);
+    const result = await generateCopy(facts, p, opts, avoid, mode);
     const score = await scoreAd(adText(result.copy), { factsContext });
 
     const attempt: Attempt = {
@@ -153,16 +155,29 @@ async function generateForPlacement(
   return attempts;
 }
 
-interface BackgroundJob {
-  bg?: BackgroundResult;
+interface PropJob {
+  prop?: PropResult;
   findings: Finding[];
   error?: string;
 }
 
-async function runBackground(facts: ProductFacts, hint: string, aspect: string): Promise<BackgroundJob> {
+async function runCreativeProp(facts: ProductFacts, hint: string): Promise<PropJob> {
   try {
-    const bg = await generateBackground(facts, hint, aspect);
-    return { bg, findings: await scoreBackground(bg) };
+    const prop = await generateCreativeProp(facts, hint);
+    const scored = await scoreCreativeProp(prop);
+
+    // The model was told, twice, never to draw the product. Checked anyway:
+    // an instruction is not a control. If it drew one, the prop is discarded
+    // outright rather than shown with a warning, because a generated product
+    // container is the one thing invariant 5 exists to forbid.
+    if (scored.containsProduct) {
+      return {
+        findings: [],
+        error: "The generated prop appeared to contain a product container and was discarded.",
+      };
+    }
+
+    return { prop, findings: scored.findings };
   } catch (err) {
     return { findings: [], error: err instanceof Error ? err.message : String(err) };
   }
@@ -191,3 +206,4 @@ function mergeFindings(score: ScoreResult, imageFindings: Finding[]): ScoreResul
 export { adText, canvasText } from "./copy";
 export type { Attempt, GateDecision } from "./gate";
 export type { Placement, PlacementId } from "./placements";
+export type { Mode } from "./prompt";

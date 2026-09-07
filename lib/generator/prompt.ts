@@ -1,6 +1,13 @@
 import type { ProductFacts, Rule } from "@/lib/types";
-import { loadRulebook, loadDisclosures, registryDigest } from "@/lib/standard/loader";
+import { loadRulebook, loadDisclosures, registryDigestFor } from "@/lib/standard/loader";
 import { fieldsFor, type CopyField, type Placement } from "./placements";
+
+/**
+ * Photographic: the default. Real photo, flat canvas, no image model call.
+ * Creative: opt-in. Adds a generated prop graphic and the checklist/stat-badge
+ * elements observed on the brand's own homepage banners.
+ */
+export type Mode = "photographic" | "creative";
 
 /**
  * The generation prompt, assembled from `standard/` at runtime.
@@ -117,6 +124,48 @@ ${fields}`;
  * says the wording is fixed, because a disclaimer a model paraphrases is a
  * disclaimer that can quietly stop naming who ran the study.
  */
+/**
+ * Creative-mode elements: the checklist and the stat badge.
+ *
+ * Both observed directly on beminimalist.co's own homepage banners
+ * ("Recommended by dermatologists", "For every skin type and concern" as a
+ * checklist; "150k+ Positive Reviews" as a bordered stat badge), not invented.
+ * What is NOT taken from those banners is the testimonial card that sits
+ * alongside them. A testimonial card needs a real reviewer's name and real
+ * words, and a model asked to supply both would be inventing a customer,
+ * which is a fabricated testimonial regardless of how the copy praises the
+ * product. POLICY-009 and POLICY-010 exist for testimonials that overreach;
+ * a testimonial that does not exist overreaches by definition. So this
+ * generator does not produce one. A marketer can add a real quote by hand.
+ */
+function creativeElementsBlock(facts: ProductFacts): string {
+  return `\n## Creative-mode elements
+
+Two additional elements are available, both seen on the brand's own homepage
+banners. Use either, both, or neither: an empty ad is safer than a decorated
+one that has to invent something to fill the space.
+
+"checklist": zero to three short benefit bullets, each one a fact from the
+product facts block above, not a rephrasing of the headline. Each item is
+checked the same way a claim is: it must be traceable to the facts, so add a
+claimTrace entry for each checklist item exactly as you would for a claim in
+the body copy.
+
+"statBadge": a single number-and-label pair for a bordered badge, the kind
+that reads "150k+ Positive Reviews" on the real site. Use it ONLY if one of
+the studies below, registered specifically for THIS product, gives you a
+number worth pulling out. If none does, leave both fields of statBadge empty.
+Never estimate, round differently than the source, or invent a number to fill
+this element.
+
+Studies registered for ${facts.name}:
+${registryDigestFor(facts.name)}
+
+Do NOT write a testimonial, a customer quote, a reviewer name, or a star
+rating. Those elements exist on the real site but require a real customer,
+which this tool does not have. Inventing one is a fabricated testimonial.`;
+}
+
 function disclosureBlock(p: Placement): string {
   if (!fieldsFor(p).includes("footnote")) return "";
 
@@ -161,7 +210,8 @@ export function buildCopyPrompt(
   facts: ProductFacts,
   placement: Placement,
   brief: Brief = {},
-  avoid: string[] = []
+  avoid: string[] = [],
+  mode: Mode = "photographic"
 ): string {
   const book = loadRulebook();
 
@@ -202,12 +252,12 @@ ${constraintBlock(book.active)}
 
 ## Substantiation registry
 
-These are the only studies this brand can cite. A number or a study reference
-that is not in this list is unsubstantiated no matter how precise it sounds.
-Note which product each study belongs to: a study run on one product does not
-substantiate a claim about another.
+These are the only studies registered for THIS product. A number or a study
+reference that is not here is unsubstantiated no matter how precise it sounds,
+and a study belongs to the product it was run on, never to a different one in
+the same range.
 
-${registryDigest()}
+${registryDigestFor(facts.name)}
 
 ## How Minimalist actually writes
 
@@ -216,7 +266,11 @@ Excessive Oil", which is as strong as anything a competitor says. What makes it
 legitimate is that the evidence is attached. So write with conviction, and
 attach the evidence, or drop the claim. Do not hedge a claim into vagueness and
 call it compliant: "may help support skin wellness" is worse copy and no safer.
-${disclosureBlock(placement)}${avoidBlock}
+${disclosureBlock(placement)}${
+    mode === "creative"
+      ? creativeElementsBlock(facts)
+      : `\n## Two fields you always leave empty\n\nSet "checklist" to an empty array and "statBadge" to {} with both fields empty. Those elements are for creative mode only.\n`
+  }${avoidBlock}
 ## The claim trace
 
 For every phrase in your copy that makes a claim about what the product is or
@@ -241,6 +295,11 @@ export const COPY_SCHEMA = {
     cta: { type: "string" },
     footnote: { type: "string" },
     caption: { type: "string" },
+    checklist: { type: "array", items: { type: "string" } },
+    statBadge: {
+      type: "object",
+      properties: { value: { type: "string" }, label: { type: "string" } },
+    },
     claimTrace: {
       type: "array",
       items: {
@@ -253,5 +312,5 @@ export const COPY_SCHEMA = {
       },
     },
   },
-  required: ["headline", "subhead", "body", "cta", "footnote", "caption", "claimTrace"],
+  required: ["headline", "subhead", "body", "cta", "footnote", "caption", "checklist", "statBadge", "claimTrace"],
 } as const;

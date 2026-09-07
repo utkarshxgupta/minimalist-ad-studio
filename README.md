@@ -106,15 +106,40 @@ own trace.
 
 **The product photograph is never generated.** The pack, the label and the
 printed concentration are photographic, because a generated label is a
-fabricated fact about a real product. Only the environment behind it may be
-generated, and generated environments are themselves scored: a backdrop of dewy
-glowing skin is an efficacy claim made in pixels instead of words.
+fabricated fact about a real product. The default (photographic) mode calls no
+image model at all: the real photo is composited onto a flat brand canvas, so
+there is only one photograph in the frame and nothing for a generated backdrop
+to clash with.
 
-That check has two layers too. A deny-list runs over the marketer's background
-hint before an image model is ever called, which is the only control that runs
-before the money is spent. The returned image is then scored against the policy
-rules. Image findings are tagged `image` rather than blended in, because they
-have no span to verify and a reviewer should weight them differently.
+**Creative mode**, opt in, adds a benefit checklist, a registry-backed stat
+badge, and one generated prop graphic — the elements actually observed on the
+brand's own homepage banners, which turn out to be a repeating template (kicker,
+headline, divider, checklist, CTA) beside real product photography with a
+*small* prop, not a painted scene. The product photo is given to the image
+model as a reference for scale and colour only; the prompt repeatedly forbids
+it from drawing the product itself, and that instruction is checked, not
+trusted — the model is asked directly whether its own output resembles a
+bottle, tube, jar or dropper, and the prop is discarded if so.
+
+That check has two layers, mirroring the text scorer. A deny-list runs over the
+marketer's style hint before an image model is ever called, which is the only
+control that runs before the money is spent. The returned prop is then scored
+against the policy rules. Image findings are tagged `image` rather than blended
+in, because they have no span to verify and a reviewer should weight them
+differently.
+
+No generated testimonial, even though the reference banners have one: a model
+supplying a reviewer's name and quote is inventing a customer, which is a
+fabricated testimonial regardless of how the copy reads.
+
+**Layout is checked, not just claims.** `lib/generator/artboard-geometry.ts`
+holds every box position as data the renderer and the tests both read, checked
+for the product never touching the canvas edge, a Story clearing Instagram's
+own UI safe zones, and the creative-mode prop never landing behind the product.
+Two real defects, a cropped product photo and a prop hidden behind an opaque
+photo, shipped before this existed; both were caught by looking at the actual
+render, not by reasoning about the layout math. See `docs/CORRECTIONS.md` C-007
+and C-008.
 
 ## Commands
 

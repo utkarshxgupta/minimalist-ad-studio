@@ -148,6 +148,25 @@ export const AdCopy = z.object({
    * squeezes out the evidence that makes a strong claim legitimate.
    */
   caption: z.string().default(""),
+  /**
+   * Short benefit bullets rendered with a checkmark, observed across the
+   * brand's real homepage banners ("Recommended by dermatologists", "For
+   * every skin type and concern"). Populated only in creative mode. Each item
+   * is grounded the same way a claim is: verified verbatim against
+   * ProductFacts, never a rewrite of a claim already made elsewhere in the ad.
+   */
+  checklist: z.array(z.string()).default([]),
+  /**
+   * A stat badge, the kind that reads "150k+ Positive Reviews" on the real
+   * site. Present only when the generator can point at a registry-backed
+   * number for THIS product; there is no invented fallback. An empty object
+   * means no badge is shown, which is the normal and expected outcome for a
+   * product with no such figure available.
+   */
+  statBadge: z
+    .object({ value: z.string(), label: z.string() })
+    .partial()
+    .default({}),
   claimTrace: z.array(ClaimTrace),
 });
 export type AdCopy = z.infer<typeof AdCopy>;
