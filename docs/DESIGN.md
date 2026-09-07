@@ -127,6 +127,45 @@ The other two produce visible nonsense; that one just loses an ingredient, and
 an ad written against incomplete facts is exactly what this pipeline is supposed
 to prevent.
 
+### Build notes, generation, imagery and the surfaces
+
+**Copy runs warm, judgment runs cold.** The scorer is at temperature 0 because a
+verdict that changes between runs is not a standard. Copy generation is at 0.85,
+because a WARN retry at temperature 0 regenerates the identical ad and the retry
+becomes theatre.
+
+**The shown attempt is the best one, not the last one.** Retries are not
+monotonically better: attempt 3 can introduce two WARNs while fixing one. The
+whole chain stays visible in the UI, so the selection is auditable rather than
+hidden.
+
+**Ungrounded claims cost an override, but are not findings.** Invariant 1 says
+every finding cites a rule ID, and there is no rule for "the generator could not
+point at its evidence". So the claim trace produces a separate class of warning
+that gates export without pretending to be a rule violation. This does leave a
+real gap in the standard: the rulebook enforces invariant 4 only for
+concentrations, via POLICY-005. A rule covering benefit claims absent from
+`ProductFacts` looks worth adding, but adding rules is a human decision and the
+eval has to be run either side of it, so it is recorded here rather than done.
+
+**The product photograph is bled off the edge, not cut out.** The storefront
+images are photographs on their own studio backgrounds, not transparent PNGs.
+Composited as a rectangle over a generated backdrop the product reads as a
+sticker. It is instead full-height against the right edge with its inner edge
+faded into the backdrop, which also keeps the printed concentration on the label
+legible, and the legibility of that label is the entire point of invariant 5.
+
+**The photograph is proxied, not hotlinked.** PNG export rasterises the artboard
+in the browser and a cross-origin image taints the canvas, so the export would
+silently produce a creative with a hole where the product should be. The proxy
+is host-allowlisted for the same reason the page fetcher is.
+
+**The override log is in the browser, and says so.** A prototype that wrote
+overrides to a module-level array on the server would look durable and lose
+every entry on the next deploy. An audit trail nobody can trust is worse than
+none, because people rely on it. Production writes to the review system; this
+writes to `localStorage` with a label.
+
 ## How A and B connect: gate
 
 The generator self-scores before it renders. A BLOCK-severity claims finding

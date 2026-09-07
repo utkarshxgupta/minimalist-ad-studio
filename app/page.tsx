@@ -7,6 +7,7 @@ import { FindingList, HighlightedCopy } from "@/components/Findings";
 import { ScorePanel, VerdictBadge } from "@/components/Verdict";
 import { CATALOGUE, productUrl } from "@/lib/generator/catalogue";
 import type { GenerationRun } from "@/lib/generator";
+import { decide } from "@/lib/generator/gate";
 import { logOverride, readOverrides, type OverrideEntry } from "@/lib/overrides";
 
 function adText(copy: { headline: string; subhead: string; body: string; cta: string }): string {
@@ -56,7 +57,7 @@ export default function GeneratePage() {
     if (!board.current || !run) return;
     const attempt = run.attempts[shown];
 
-    if (run.decision.export === "override") {
+    if (decision?.export === "override") {
       logOverride({
         at: new Date().toISOString(),
         product: run.facts.name,
@@ -77,8 +78,14 @@ export default function GeneratePage() {
 
   const attempt = run?.attempts[shown];
   const background = run?.background ? `data:${run.background.mimeType};base64,${run.background.data}` : undefined;
+
+  // Recomputed for the attempt actually on screen, not taken from the run. The
+  // marketer can page back to an earlier attempt, and a gate that describes a
+  // different creative than the one being looked at is worse than no gate.
+  // Same pure function the server ran, so the two cannot drift.
+  const decision = attempt ? decide(attempt) : null;
   const canExport =
-    run?.decision.export === "free" || (run?.decision.export === "override" && reason.trim().length >= 12);
+    decision?.export === "free" || (decision?.export === "override" && reason.trim().length >= 12);
 
   return (
     <div className="mx-auto grid max-w-[1400px] gap-8 px-6 py-8 lg:grid-cols-[380px_1fr]">
@@ -219,10 +226,10 @@ export default function GeneratePage() {
           <>
             <div className="grid gap-6 xl:grid-cols-[540px_1fr]">
               <div>
-                {run.decision.render ? (
+                {decision?.render ? (
                   <Artboard ref={board} copy={attempt.copy} facts={run.facts} background={background} />
                 ) : (
-                  <BlockedPanel run={run} />
+                  <BlockedPanel attempt={attempt} />
                 )}
 
                 <div className="mt-3 flex items-center gap-3">
@@ -234,13 +241,13 @@ export default function GeneratePage() {
                     Export PNG
                   </button>
                   <span className="text-xs text-muted">
-                    {run.decision.export === "blocked" && "Export disabled. This escalates to a human."}
-                    {run.decision.export === "override" && "Export requires a logged reason."}
-                    {run.decision.export === "free" && "Clean. Exports freely."}
+                    {decision?.export === "blocked" && "Export disabled. This escalates to a human."}
+                    {decision?.export === "override" && "Export requires a logged reason."}
+                    {decision?.export === "free" && "Clean. Exports freely."}
                   </span>
                 </div>
 
-                {run.decision.export === "override" && (
+                {decision?.export === "override" && (
                   <textarea
                     className="field mt-2"
                     rows={2}
@@ -334,8 +341,7 @@ export default function GeneratePage() {
  * somebody else asks why not, and the argument the standard was written to end
  * starts again.
  */
-function BlockedPanel({ run }: { run: GenerationRun }) {
-  const attempt = run.attempts[run.chosen];
+function BlockedPanel({ attempt }: { attempt: GenerationRun["attempts"][number] }) {
   return (
     <div className="border border-block/40 bg-block/5 p-5" style={{ width: 540, minHeight: 380 }}>
       <VerdictBadge verdict="BLOCK" />
