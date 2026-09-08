@@ -1,9 +1,10 @@
 "use client";
 
-import { forwardRef } from "react";
+import { forwardRef, useState } from "react";
 import type { AdCopy, ProductFacts } from "@/lib/types";
 import type { Placement } from "@/lib/generator/placements";
 import { geometryFor, propAccentFor, type Box } from "@/lib/generator/artboard-geometry";
+import { sampleBackdrop } from "@/lib/generator/hero-backdrop";
 
 /**
  * The creative, at whatever size the placement asks for.
@@ -46,7 +47,11 @@ export interface ArtboardProps {
 
 const INK = "#16130f";
 const MUTED = "#4a423a";
-/** Near-white, matching the brand's own canvas token observed on beminimalist.co. */
+/**
+ * Near-white, matching the brand's own canvas token observed on
+ * beminimalist.co. Used when the product photograph has no flat backdrop of
+ * its own to match; see `hero-backdrop.ts` for why matching is preferred.
+ */
 const CANVAS = "#f6f5f2";
 /** One hairline weight for every rule drawn on the canvas. */
 const HAIRLINE = "rgba(22,19,15,0.18)";
@@ -79,6 +84,12 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
   const { width: W, height: H, layout } = placement;
   const scale = previewWidth / W;
   const geo = geometryFor(placement);
+
+  // The photograph's own studio backdrop, once it has loaded and been read.
+  // Null until then, and null forever for a cut-out or dark-ground image, so
+  // the brand canvas is both the starting value and the fallback.
+  const [backdrop, setBackdrop] = useState<string | null>(null);
+  const ground = backdrop ?? CANVAS;
 
   const hero = facts.heroImageUrl ? `/api/image-proxy?url=${encodeURIComponent(facts.heroImageUrl)}` : null;
   const active = facts.actives[0];
@@ -138,7 +149,7 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
             height: H,
             position: "relative",
             overflow: "hidden",
-            background: CANVAS,
+            background: ground,
             fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
             color: INK,
           }}
@@ -208,6 +219,7 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
                 src={hero}
                 alt={facts.name}
                 crossOrigin="anonymous"
+                onLoad={(e) => setBackdrop(sampleBackdrop(e.currentTarget))}
                 style={{
                   width: "100%",
                   height: "100%",

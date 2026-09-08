@@ -19,6 +19,7 @@ import { sanitiseHint, buildPropPrompt } from "../lib/generator/creative";
 import { PLACEMENT_LIST, fieldsFor, placement } from "../lib/generator/placements";
 import { canvasWordCount } from "../lib/generator/ad-text";
 import { tooWordyFor } from "../lib/generator/archetypes";
+import { isFlat, luminance } from "../lib/generator/hero-backdrop";
 import {
   geometryFor,
   hasMargin,
@@ -449,6 +450,29 @@ check("the creative-mode prop never sits behind the product, on any layout", () 
     ok(!overlaps(product, prop), `${p.id}: prop ${JSON.stringify(prop)} overlaps product ${JSON.stringify(product)}`);
     ok(hasMargin(prop, MIN_MARGIN), `${p.id}: prop box itself should clear the canvas edge too`);
   }
+});
+
+// --- The photograph's own backdrop -------------------------------------------
+
+check("four matching opaque corners read as one flat backdrop", () => {
+  // The real niacinamide hero: RGB, no alpha, uniform #e5e9ea on every corner.
+  const corner: [number, number, number, number] = [229, 233, 234, 255];
+  ok(isFlat([corner, corner, corner, corner]), "a studio backdrop");
+  ok(isFlat([corner, [231, 235, 236, 255], corner, [227, 231, 232, 255]]), "JPEG noise is tolerated");
+});
+
+check("a scene, a gradient or a cut-out is not adopted as a canvas", () => {
+  const pale: [number, number, number, number] = [229, 233, 234, 255];
+  ok(!isFlat([pale, [120, 90, 60, 255], pale, pale]), "corners that disagree are not one colour");
+  ok(!isFlat([[0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0], [0, 0, 0, 0]]), "a cut-out image has no backdrop");
+  ok(!isFlat([pale, pale, pale, [229, 233, 234, 10]]), "a transparent corner is not opaque");
+});
+
+check("a dark backdrop is refused, because the ink on top of it is near-black", () => {
+  // A visible seam is a worse ad. Unreadable copy is a broken one, so the
+  // brand canvas wins whenever adopting the photo's ground would cost legibility.
+  ok(luminance(229, 233, 234) > 0.72, "the real studio backdrop is adopted");
+  ok(luminance(24, 22, 20) < 0.72, "a near-black ground is refused");
 });
 
 // --- Placements and the channel split --------------------------------------
