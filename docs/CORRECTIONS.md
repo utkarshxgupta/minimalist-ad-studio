@@ -334,3 +334,104 @@ with a cut-out, gradient, or dark ground keeps the brand canvas.
 colour cannot have a seam" was true of the canvas and said nothing about what
 was being composited onto it, and the conclusion held for two more sessions
 because nobody looked at a render and asked what the grey rectangle was.
+
+---
+
+## C-011: The rectangle was the shadow, not the colour
+
+**Claimed.** C-010 reported the pasted-rectangle look solved: the canvas adopts
+the photograph's own studio backdrop, two identical flat colours cannot seam,
+verified by reading the rendered pixels on both sides of the boundary.
+
+**Actual.** The colours did match, and the product still read as a rectangle
+pasted onto the canvas, because the outline was never a colour boundary. The
+artboard drew `filter: drop-shadow(...)` under the packshot to lift it off the
+ground. That filter follows an image's alpha silhouette, which is correct for a
+cut-out PNG and traces the bottle. Every hero image on beminimalist.co is
+opaque RGB with no alpha at all, so there was no silhouette to follow and it
+traced the image's four edges instead, drawing a soft box around the
+photograph. The brand's photography already carries a real studio shadow under
+the bottle, so the synthetic one was contributing nothing except the outline.
+
+**How it was caught.** Reported by the user, who was still looking at a
+rectangle after being told it was fixed.
+
+**Fix.** `sampleBackdrop` returns whether the photograph has any transparency
+at all, and the shadow is drawn only when it does. Verified by rendering, where
+the product now sits on the canvas carrying only its own photographic shadow.
+
+**What it says.** C-010 measured the thing it had just changed and declared the
+symptom gone. Two pixel readings either side of the boundary proved the colours
+matched, which was true, and said nothing about the defect the user had
+actually described. Measuring your own fix is not the same as checking the
+complaint.
+
+---
+
+## C-012: Two things acknowledged as gaps, then not built
+
+**Claimed.** After the creative audit, a list of real gaps was written down and
+worked through in priority order, starting with the creative archetypes.
+
+**Actual.** Two items on that list were load-bearing and got skipped rather
+than deprioritised, and both were things the user had asked for directly.
+
+The first was typography. Every creative this tool has produced was set in
+Geist, the app's own UI font, while beminimalist.co sets its entire site in
+ProximaNovaRegular and ProximaNovaBold. Reading the live stylesheet to find
+that out took one request, which is one more request than was made before
+calling it a known gap and moving on.
+
+The second was creative mode itself. The ask was explicit: give the product
+image to an image model and let it generate the ad, breaking out of the packshot
+and text format. What was built instead generated a small decorative prop and
+composited it beside the untouched packshot, which is a packshot with a motif
+next to it. The reasoning in the module was about invariant 5 and it was honest
+reasoning, but the honest conclusion would have been to say the request
+conflicts with an invariant and ask, not to quietly build the version that
+avoided the conflict and describe it as creative mode.
+
+**How it was caught.** Reported by the user, twice.
+
+**Fix.** The artboard is set in the brand stack, naming Proxima Nova first so a
+licensed machine renders the real face, with Figtree committed as the
+substitute. Creative mode now sends the real product photograph to the image
+model and renders the finished frame full-bleed with the copy typeset over it.
+The invariant 5 exception is explicit, documented, and charged at the gate: a
+creative-mode ad can never export freely.
+
+**What it says.** Naming a gap is not the same as closing it, and a written
+list of known gaps is a comfortable place for the hard ones to sit. Both of
+these were cheap. Neither was hard. They were skipped because the archetypes
+were more interesting to build.
+
+---
+
+## C-013: The image model cannot be trusted to re-letter a real label, and it said it could
+
+**Claimed.** Creative mode's prompt forbids re-lettering the pack at length,
+and the image scorer is asked directly whether any pack text looks invented,
+misspelled or garbled. Between them, a corrupted label would be caught.
+
+**Actual.** The first frame this mode ever produced rendered "acetyi
+glucosamine" onto the label of a product that says acetyl glucosamine, and the
+scorer, asked that exact question, answered no. The corruption is one character
+in six-point type inside a photograph, which is precisely the kind of detail a
+vision model glosses.
+
+**How it was caught.** By zooming into the label of the first generated frame
+rather than admiring the composition, having just written a comment claiming
+this was the one thing that mattered most in this mode.
+
+**Fix.** `lib/generator/pack-text.ts`. The model is asked to do the thing models
+are reliable at, transcribing what it sees, and the judgment is made in code: a
+word on the pack that is not in the product page's own vocabulary but is one
+edit away from a word that is, is a corruption of it. Frames that fail are
+discarded and regenerated, capped at three, because rejecting every frame is
+indistinguishable from not having the feature.
+
+**What it says.** Two live runs, two mangled labels; a third product passed
+first time. The mode works, and its failure rate depends on how much small type
+a given pack carries, which is not something a prompt can fix. That is the
+whole argument for the mandatory override: the automated checks here are good
+enough to catch what they catch, and nobody should be told they are enough.

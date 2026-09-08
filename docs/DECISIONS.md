@@ -250,6 +250,52 @@ past fifty words, which no Meta canvas budget accommodates; the generator would
 report that afterwards as a layout note, correctly, but a note that fires on
 every single run is a note people learn to scroll past.
 
+### Creative mode generates the whole frame, and pays for it at the gate
+
+The ask was direct: give the product photograph to an image model and let it
+make the ad. That collides with invariant 5, which says the product image is
+never generated, and the collision is real rather than a technicality. The pack
+in a creative-mode frame is model output. A model that redraws a label can
+change what it says.
+
+The resolution is not to pretend the invariant is intact. It is to make the
+exception explicit and charge for it:
+
+- A creative-mode ad **can never export freely.** It always requires a logged
+  human override, whatever the copy scores, because there is no text check for
+  a fact that exists only in pixels.
+- Typography is never left to the image model. The frame is generated with
+  deliberate negative space, derived from the same layout the artboard uses,
+  and every word is typeset in CSS over it. So every word on the finished ad is
+  still copy the scorer read and the claim trace verified.
+- Photographic mode stays the default, and it is the honest one: nothing in
+  that frame is generated at all.
+
+The label check is the interesting part. Asking the vision model "does any pack
+text look invented" was the obvious control and it failed on the first frame,
+which rendered "acetyi glucosamine" onto a real product and was passed clean.
+So the model is asked to transcribe rather than judge, and the judgment is made
+deterministically: a word on the pack that is not in the product page's own
+vocabulary but is one edit away from a word that is, is a corruption of it.
+Frames that fail are regenerated, capped at three.
+
+Measured, not asserted: two products, one passes on the first frame, one fails
+three times. The failure rate tracks how much small type a pack carries, and no
+prompt fixes that. Which is the argument for the override, not against the
+mode.
+
+### The type is the brand's, or it says whose it is
+
+beminimalist.co sets its entire site in ProximaNovaRegular and ProximaNovaBold,
+read off the live stylesheet. Proxima Nova is licensed and cannot ship in this
+repo, so the artboard's font stack names it first and falls back to Figtree.
+A machine with the licence installed renders and exports the real face with no
+code change, because html-to-image captures through the browser's own stack.
+
+Recorded rather than silently substituted. A creative set in a stand-in face is
+a creative a brand designer rejects on sight, and they should be able to tell
+which one they are looking at.
+
 ### Deliberately not built
 
 RAG over the rulebook (it fits in context; retrieval adds a failure mode and
