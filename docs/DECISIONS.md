@@ -296,6 +296,27 @@ Recorded rather than silently substituted. A creative set in a stand-in face is
 a creative a brand designer rejects on sight, and they should be able to tell
 which one they are looking at.
 
+### The call to action is a platform field, not artwork
+
+Meta draws its own CTA button under the ad, in the link strip beside the domain
+and headline, from a fixed list the advertiser picks in Ads Manager. It is ad
+metadata, a sibling of the caption, and it is not part of the creative.
+
+So `Placement.ctaSurface` says where the call to action lives, and today no
+placement puts one on the canvas: Meta placements declare `platform`, and the
+PDP listing declares `none`, because that reader is already on the product page
+a few hundred pixels from the real buy button.
+
+The value is picked from Meta's own list rather than written, since free text
+here is something nobody can select in the platform. It is still scored: a CTA
+is copy, and "Order Now" under a claim the ad cannot support is still that ad
+making that claim. It just does not spend the canvas word budget, because it is
+not ink on the canvas.
+
+There is deliberately no `canvas` value yet. The brand does put a CTA inside its
+own website banners, and a web banner is itself the click target, but this tool
+does not generate that placement.
+
 ### Deliberately not built
 
 RAG over the rulebook (it fits in context; retrieval adds a failure mode and

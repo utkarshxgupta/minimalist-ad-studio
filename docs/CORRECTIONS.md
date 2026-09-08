@@ -435,3 +435,48 @@ first time. The mode works, and its failure rate depends on how much small type
 a given pack carries, which is not something a prompt can fix. That is the
 whole argument for the mandatory override: the automated checks here are good
 enough to catch what they catch, and nobody should be told they are enough.
+
+---
+
+## C-014: Two "Shop Now" buttons on every Meta ad
+
+**Claimed.** The channel split was built carefully: Meta placements get a tight
+canvas budget and put the argument in the caption, because a feed ad is
+scrolled past and substantiation does not fit in fifteen words. The spec that
+informed that split was read closely and its channel model adopted.
+
+**Actual.** In that same spec, `call_to_action: "Shop Now"` sits inside
+`meta_ad_copy`, a sibling of `headline` and `primary_text`. Those are Meta's own
+ad fields, set in Ads Manager, not creative content. Meta renders that button
+itself, in the grey link strip beneath the image, from a fixed list the
+advertiser picks. The spec's compositing layers, 0 through 4, contain no CTA at
+all.
+
+The artboard painted a black "Shop Now" button onto every canvas. So every Meta
+ad this tool produced shipped with two call-to-action buttons, ours and the
+platform's, and spent words from a fifteen-word budget on the one Meta was
+always going to draw. On the PDP listing image it was worse than redundant: it
+told a reader who is already on the product page, a few hundred pixels from the
+real buy button, to go shopping.
+
+**How it was caught.** Reported by the user, asking whether I had forgotten what
+the spec said about the CTA. I had: I read the spec, took the channel split and
+the archetypes from it, and read `call_to_action` as ad copy to render rather
+than as the platform field it is sitting in an object literally named
+`meta_ad_copy`. Confirmed afterwards in the Meta Ad Library, where every ad card
+shows the button drawn by Meta below the creative.
+
+**Fix.** `Placement.ctaSurface` decides where the call to action lives:
+`platform` for Meta, `none` for a PDP listing. The artboard draws no button.
+`canvasText` no longer counts the CTA against the canvas budget, because it is
+not on the canvas, while `adText` still carries it so it is still scored. The
+value itself is constrained to Meta's own list rather than written freehand,
+since a generator that produces "Discover the science" has produced something
+nobody can select in Ads Manager. Both surfaces now present it as an ad field
+beside the caption, not as a line of the creative.
+
+**What it says.** The failure was not missing the spec. It was reading a data
+contract as prose: `meta_ad_copy.call_to_action` says exactly where that value
+belongs, in the field name, and I mapped it onto the nearest thing my own model
+already had. Adopting someone else's model in pieces means the pieces get bent
+to fit the model you arrived with.
