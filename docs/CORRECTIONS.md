@@ -675,3 +675,33 @@ The discarded reasons are a different failure and a worse one. Nothing was
 wrong with the gate; it did its job and the interface silently dropped the
 result. Worth stating plainly: a control whose output nobody renders is not a
 control, it is a computation.
+
+---
+
+## C-018: The citation checker invented a filename and then failed the writer for it
+
+**Claimed.** `npm run test:citations` verifies that every file path named in the
+docs actually exists, so a correction that cites a file cannot quietly rot.
+
+**Actual.** Its path pattern listed extensions as `md|ts|tsx|mjs|...`.
+Alternation is first-match-wins, so `app/page.tsx` matched `.ts`, stopped, and
+the checker went looking for `app/page.ts`. It then reported that file as
+missing, which it was, because the checker had just made it up.
+
+The bug sat latent for the life of the project: no doc had cited a `.tsx` file
+until C-017 did. The first correct citation of a component was the thing that
+broke it.
+
+**How it was caught.** It failed the build during the C-017 verification pass,
+one test out of 105, on a change that touched no rules and no docs tooling.
+
+**Fix.** Longest extension first, plus a lookahead so a partial match cannot
+truncate a path regardless of ordering. The ordering is now commented as
+load-bearing rather than cosmetic, because it reads exactly like a tidy-up
+someone would later "simplify" back into the bug.
+
+**What it says.** The checker was written to stop the docs asserting things
+that are not true, and its own failure mode was asserting something untrue with
+more authority than the doc it was checking. Worth remembering when a check
+disagrees with a human: the check is code, and code of this kind is usually
+younger and less reviewed than what it is checking.

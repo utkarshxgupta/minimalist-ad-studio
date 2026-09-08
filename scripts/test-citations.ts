@@ -41,9 +41,17 @@ const SOURCES = [
  * An earlier version also matched a bare `word/` so that directory references
  * would be checked. It read "29/29", "before/after" and "HTML/CSS" as paths.
  * Directories are not checked; a missing one shows up as missing files anyway.
+ *
+ * The extensions are ordered longest first, and that ordering is load-bearing
+ * rather than tidy. Alternation is first-match-wins, so with `ts` ahead of
+ * `tsx` this pattern read `app/page.tsx` as `app/page.ts`, then reported the
+ * file it had just invented as missing. It sat latent until the first doc in
+ * this repo cited a `.tsx` file, at which point the checker failed a correct
+ * citation and blamed the writer. The lookahead stops the same class of
+ * truncation without depending on the ordering at all.
  */
 const PATH_PATTERN =
-  /\b((?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+\.(?:md|ts|tsx|mjs|yaml|yml|jsonl|json|css))/g;
+  /\b((?:[A-Za-z0-9_.-]+\/)+[A-Za-z0-9_.-]+\.(?:tsx|jsonl|yaml|json|mjs|yml|css|ts|md)(?![A-Za-z0-9]))/g;
 
 function citationsIn(file: string): string[] {
   const raw = readFileSync(join(process.cwd(), file), "utf8");

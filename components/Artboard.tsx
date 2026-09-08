@@ -195,7 +195,16 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
 
   // Type scales with canvas width, so an 1100px listing image and a 1080px
   // story share one design rather than two hand-tuned ones.
-  const u = W / 1080;
+  // The type unit, from the geometric mean of the canvas rather than its width.
+  //
+  // This was `W / 1080`, and every placement here is between 1080 and 1100
+  // wide, so every format got identical type sizes no matter how tall it was.
+  // On a 9:16 Story that put the mechanism block at 18px on a 1920px canvas,
+  // 0.94 percent of the height against 1.67 on the square, which is the
+  // unreadable small print in a Story viewed full screen on a phone. Width
+  // alone was never the right basis: a Story is not a wide square, it is a
+  // bigger canvas, and its type has to grow with it.
+  const u = Math.sqrt(W * H) / 1080;
   const pad = Math.round(48 * u);
 
   const productPx = px(geo.product, W, H);
@@ -203,7 +212,10 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
 
   const scrim = scrimFor(geo, layout);
   const copyScrimPx = px(scrim.box, W, H);
-  const headlineSize = Math.round((layout === "tall" ? 74 : 56) * u);
+  // The tall base comes down because `u` now carries the format's size: 74 was
+  // compensating by hand for a unit that ignored height, and keeping both
+  // would overflow the copy box.
+  const headlineSize = Math.round((layout === "tall" ? 58 : 56) * u);
 
   // On a tall format the copy column sits above the product, so a footnote
   // anchored to the canvas bottom would land on the bottle and be unreadable.

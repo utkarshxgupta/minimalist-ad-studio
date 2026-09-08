@@ -116,9 +116,15 @@ export function geometryFor(p: Placement): Geometry {
  *
  * The scrim has to be at full strength everywhere the copy sits and reach zero
  * before the product, and it needs room in between or the falloff reads as a
- * hard-edged panel pasted over the photograph.
+ * hard-edged panel pasted over the photograph. Which is what the first version
+ * of this produced on a Story: it stopped dead at its box edge while still at
+ * 0.94, cutting a straight line across the middle of the frame.
+ *
+ * Kept tight rather than generous, because on a tall frame the copy ends at
+ * 0.38 and the generated scene puts its product not far below; a longer fade
+ * washes out the top of the product it is meant to stop short of.
  */
-export const SCRIM_FADE = 0.18;
+export const SCRIM_FADE = 0.12;
 
 /** Opacity the scrim holds across the whole copy region. */
 export const SCRIM_STRENGTH = 0.92;
