@@ -1,11 +1,29 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Geist, Geist_Mono } from "next/font/google";
+import { Geist, Geist_Mono, Figtree } from "next/font/google";
 import { loadRulebook } from "@/lib/standard/loader";
 import "./globals.css";
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
+
+/**
+ * The face the creatives are set in.
+ *
+ * beminimalist.co sets everything in ProximaNovaRegular and ProximaNovaBold,
+ * confirmed by reading the live stylesheet, not by guessing from a screenshot.
+ * Proxima Nova is licensed commercially and cannot be redistributed in this
+ * repo, so the artboard's stack names the real face first and falls back to
+ * Figtree, the closest free geometric sans by x-height, aperture and weight
+ * range. On a machine where the brand licence is installed, the creative and
+ * the export both render in the actual brand font with no code change, because
+ * html-to-image captures through the browser's own font stack.
+ *
+ * Recorded rather than silently substituted: a creative set in a stand-in face
+ * is a creative a brand designer will reject, and they should be able to see
+ * exactly which face they are looking at.
+ */
+const brand = Figtree({ variable: "--font-brand", subsets: ["latin"], weight: ["400", "500", "600", "700"] });
 
 export const metadata: Metadata = {
   title: "Minimalist Ad Studio",
@@ -19,7 +37,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   const book = loadRulebook();
 
   return (
-    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
+    <html lang="en" className={`${geistSans.variable} ${geistMono.variable} ${brand.variable} h-full antialiased`}>
       <body className="min-h-full flex flex-col">
         <header className="border-b border-line">
           <div className="mx-auto flex max-w-[1400px] items-baseline gap-6 px-6 py-3">
