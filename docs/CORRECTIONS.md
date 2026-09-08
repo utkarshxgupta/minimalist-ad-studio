@@ -265,3 +265,72 @@ underlying gap: nothing checked layout geometry, only claims and policy. That
 gap is now closed with data both the renderer and the tests read from the same
 module, but it took shipping the same class of bug twice, once past me, once
 past my own fix, to close it.
+
+---
+
+## C-009: A canvas word limit that did not count half the canvas
+
+**Claimed.** Every placement carries a canvas word budget, tight on the short
+formats and generous on the PDP listing image, and the generator reports copy
+that exceeds it as a layout note. That budget was described in the decisions
+doc as the mechanism that keeps substantiation honest on formats too small to
+carry it.
+
+**Actual.** The count was assembled from a hand-written list of four field
+names: headline, subhead, body, cta. Creative mode had since added a checklist
+and a stat badge, and this session added three more content blocks, all of
+which are printed on the creative exactly like the headline is. None of them
+were counted. A live mechanism-archetype run put roughly forty words on a Meta
+square whose limit is fifteen and reported nothing wrong, because the four
+fields it did look at were within budget.
+
+**How it was caught.** Running the three new archetypes against the live site
+and reading the output, rather than trusting that the tests passing meant the
+feature worked. The tests passed because they tested the four fields too.
+
+**Fix.** `canvasWordCount` moved into `lib/generator/ad-text.ts` and is now
+derived from `canvasText`, the same function that decides what is rendered.
+There is no longer a list of field names to fall behind; anything that appears
+on the canvas is counted because it is the canvas text that gets counted. The
+archetype prompts were also told the block spends the budget, which took a
+mechanism block from forty words to eight. A regression test asserts a content
+block moves the count.
+
+**What it says.** The same failure shape as C-006 and the grounding false
+positive: two places encoding one fact, drifting apart quietly. The pattern in
+all three fixes is identical, and it is the only fix that works. Derive the
+second thing from the first instead of writing it down twice.
+
+---
+
+## C-010: The compositing rewrite fixed the generated backdrop and never looked at the photograph's
+
+**Claimed.** The compositing rewrite (C-007) resolved the visible colour seam
+by removing the generated backdrop entirely and compositing the product onto a
+flat brand canvas, reasoning that a flat colour cannot have a seam.
+
+**Actual.** It cannot have a seam with itself. The product photograph is not a
+cut-out: every hero image on beminimalist.co is an opaque RGB PNG with a flat
+studio backdrop baked in, and the niacinamide serum's is a uniform #e5e9ea.
+Composited onto the brand's warm #f6f5f2 canvas, that draws a hard-edged cool
+rectangle around the bottle on every single ad the tool produces. It is the
+same defect the user originally reported as "the gradient doesn't feel
+continuous", and it survived the rewrite that was carried out to fix it,
+because the rewrite treated the generated backdrop as the only backdrop in the
+frame.
+
+**How it was caught.** Rendering the three new archetypes and looking at them,
+where it was immediately obvious, then confirming it by reading the actual
+corner pixels of the source PNG rather than judging by eye.
+
+**Fix.** `lib/generator/hero-backdrop.ts` samples the photograph's own corners
+and, when they agree and are light enough to keep near-black copy readable,
+the canvas adopts that colour. Two identical flat colours cannot have a seam,
+which is the same construction argument the flat canvas was chosen on,
+finally applied to both photographs in the frame instead of one. A photograph
+with a cut-out, gradient, or dark ground keeps the brand canvas.
+
+**What it says.** C-007's reasoning was right and its scope was wrong. "A flat
+colour cannot have a seam" was true of the canvas and said nothing about what
+was being composited onto it, and the conclusion held for two more sessions
+because nobody looked at a render and asked what the grey rectangle was.

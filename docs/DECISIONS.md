@@ -209,15 +209,56 @@ unrun compliance check must never read as a pass. This is surfaced with its
 cause, because safe behaviour that hides why it happened is hard to tell from
 broken behaviour, and that cost an hour once already.
 
+### Creative-mode archetypes: four content blocks, one template
+
+Every banner on beminimalist.co is the same template with a different block in
+the middle: wordmark, headline, one content block, CTA, product photograph.
+That observation is the whole design. An archetype selects which block gets
+written, not a different canvas, so all four render through one `Artboard` and
+are covered by one set of layout tests. Four separate templates would be four
+things to keep compliant, and compliance is the expensive part.
+
+The four are a benefit checklist with a registry-backed stat badge, a mechanism
+of action (bold verb plus how it works), an ingredient synergy (what each named
+ingredient does), and an audience qualification grid.
+
+Two of them are worth defending individually.
+
+**Ingredient synergy gets its own grounding check**, separate from the claim
+trace. The trace can catch an ungrounded role phrase, but an ingredient name is
+often a single word that appears somewhere in a page of prose without being an
+ingredient of this product, so a synergy naming Retinol in a salicylic acid
+serum would pass a substring check and be false. The name is therefore verified
+against `ProductFacts.ingredientNotes`, which is exactly the list of
+ingredients the product's own page describes.
+
+**The audience grid is not written by the model at all.** Those values are
+already structured and verbatim on the product page under its own labels, so
+`copy.ts` transcribes them directly and discards whatever the model returned
+for that field. Asking a model to copy structured facts adds nothing and
+subtracts a guarantee. It will usually do it correctly, and "usually" is not a
+control.
+
+The archetype the marketer picks is enforced in code, not requested in the
+prompt. Every block the chosen archetype does not own is blanked after parsing,
+so a stray block cannot reach a finished creative on the strength of the model
+having been asked nicely.
+
+One archetype does not fit every placement, and the tool says so before the
+call rather than after it. The audience grid is verbatim page text and runs
+past fifty words, which no Meta canvas budget accommodates; the generator would
+report that afterwards as a layout note, correctly, but a note that fires on
+every single run is a note people learn to scroll past.
+
 ### Deliberately not built
 
 RAG over the rulebook (it fits in context; retrieval adds a failure mode and
 removes determinism), agent frameworks (they hide the judgment this project
 exists to make visible), multi-agent debate per ad (slower, costlier, and it
 makes the standard unauditable), LLM-as-judge for evaluating the scorer (we have
-human labels, and labels beat a judge), fine-tuning, vector DB, auth. One
-placement, because each additional placement changes the copy budget and
-therefore the claim surface.
+human labels, and labels beat a judge), fine-tuning, vector DB, auth. The
+remaining six creative archetypes in the observed corpus, which are variations
+on the four built rather than new grounding problems.
 
 ---
 
