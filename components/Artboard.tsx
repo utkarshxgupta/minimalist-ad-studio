@@ -1,10 +1,11 @@
 "use client";
 
-import { forwardRef, useState } from "react";
+import { forwardRef, useEffect, useRef, useState } from "react";
 import type { AdCopy, ProductFacts } from "@/lib/types";
 import type { Placement } from "@/lib/generator/placements";
 import { geometryFor, type Box } from "@/lib/generator/artboard-geometry";
 import { sampleBackdrop, type HeroGround } from "@/lib/generator/hero-backdrop";
+import { backdropDividedDataUrl } from "@/lib/generator/cutout";
 
 /**
  * The creative, at whatever size the placement asks for.
@@ -82,6 +83,23 @@ const MUTED = "#4a423a";
  * its own to match; see `hero-backdrop.ts` for why matching is preferred.
  */
 const CANVAS = "#f6f5f2";
+
+/**
+ * A very quiet vertical gradient for the canvas.
+ *
+ * Only safe now that the packshot's own backdrop is divided out. While the
+ * canvas had to match a flat photographic sweep exactly, any gradient
+ * guaranteed a visible seam somewhere along the product's edge, so the ground
+ * had to be one flat colour. With nothing behind the product there is no edge
+ * to mismatch, so the ground can be designed rather than dictated by whatever
+ * sweep the photographer used.
+ *
+ * Kept within four levels end to end. This is the same page that once carried
+ * a generated photoreal backdrop and read as a "milky smudge"; the lesson from
+ * that was not that gradients are wrong, it was that a gradient competing with
+ * a photograph is.
+ */
+const CANVAS_GRADIENT = "linear-gradient(180deg, #f8f7f4 0%, #f4f3ee 100%)";
 /** One hairline weight for every rule drawn on the canvas. */
 const HAIRLINE = "rgba(22,19,15,0.18)";
 
@@ -133,10 +151,18 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
   // Null until then, and null forever for a cut-out or dark-ground image, so
   // the brand canvas is both the starting value and the fallback.
   const [heroGround, setHeroGround] = useState<HeroGround | null>(null);
+  // The packshot with its studio sweep divided out, composited with multiply.
+  // Null until the photo has decoded, and null for any photo whose backdrop
+  // cannot be read, in which case the raw photograph is drawn as before.
+  const [divided, setDivided] = useState<string | null>(null);
 
   // A generated frame is full-bleed, so it is its own ground and the sampled
   // packshot colour is irrelevant.
-  const ground = sceneImage ? CANVAS : heroGround?.color ?? CANVAS;
+  // With the backdrop divided out the canvas is free again, so it is the brand
+  // ground rather than whatever colour the photographer's sweep happened to be.
+  // The sampled colour is still used when division was not possible, because
+  // matching the sweep is better than sitting a grey rectangle on cream.
+  const ground = sceneImage || divided ? CANVAS_GRADIENT : heroGround?.color ?? CANVAS;
 
   // The synthetic shadow is drawn only for a cut-out. `drop-shadow` follows an
   // image's alpha silhouette, so on a transparent PNG it traces the bottle,
@@ -147,8 +173,34 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
   // own studio shadow under the bottle, so there was never anything to add.
   const shadow = heroGround?.opaque === false ? "drop-shadow(0 18px 26px rgba(30,24,16,0.16))" : undefined;
 
+  function readGround(img: HTMLImageElement) {
+    // The divided image is swapped into this same element, so its own load
+    // event lands here too. Without this guard it would be sampled (backdrop
+    // now pure white), divided again, and written back to `src`, firing load
+    // again forever.
+    if (divided) return;
+
+    const g = sampleBackdrop(img);
+    setHeroGround(g);
+    setDivided(g.color && g.opaque ? backdropDividedDataUrl(img, g.color) : null);
+  }
+
   const hero = facts.heroImageUrl ? `/api/image-proxy?url=${encodeURIComponent(facts.heroImageUrl)}` : null;
   const active = facts.actives[0];
+
+  const heroRef = useRef<HTMLImageElement>(null);
+
+  // A cached photograph is already `complete` by the time React mounts this,
+  // so its load event never fires and `onLoad` alone never runs. That is not a
+  // rare path: it is what happens on every render after the first, which is
+  // most of them. The packshot then kept its studio sweep and the ad showed
+  // the grey rectangle again, intermittently and therefore confusingly.
+  useEffect(() => {
+    const img = heroRef.current;
+    if (img?.complete && img.naturalWidth > 0) readGround(img);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hero]);
+
 
   // Type scales with canvas width, so an 1100px listing image and a 1080px
   // story share one design rather than two hand-tuned ones.
@@ -290,14 +342,27 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
                 ...productPx,
                 filter: shadow,
                 zIndex: 2,
+                // The blend lives on this wrapper, not on the <img> inside it.
+                // A positioned element with a z-index opens its own stacking
+                // context, and a blend mode only sees backdrop painted inside
+                // that context, which for the image is nothing at all: it
+                // rendered completely unblended, pure white where the sweep
+                // should have vanished. On the wrapper the backdrop is the
+                // canvas, which is what it needs to multiply against.
+                //
+                // White is the identity under multiply, so the divided-out
+                // sweep disappears onto the canvas and only the product and
+                // its own real shadow remain.
+                mixBlendMode: divided ? "multiply" : undefined,
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={hero}
+                ref={heroRef}
+                src={divided ?? hero}
                 alt={facts.name}
                 crossOrigin="anonymous"
-                onLoad={(e) => setHeroGround(sampleBackdrop(e.currentTarget))}
+                onLoad={(e) => readGround(e.currentTarget)}
                 style={{
                   width: "100%",
                   height: "100%",
@@ -314,7 +379,8 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
               display: "flex",
               flexDirection: "column",
               alignItems: "flex-start",
-              justifyContent: geo.align === "center" ? "center" : "flex-start",
+              justifyContent:
+                geo.align === "center" ? "center" : geo.align === "end" ? "flex-end" : "flex-start",
               zIndex: 3,
               ...copyPx,
             }}

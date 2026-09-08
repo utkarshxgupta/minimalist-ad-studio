@@ -21,6 +21,7 @@ import { canvasWordCount } from "../lib/generator/ad-text";
 import { tooWordyFor } from "../lib/generator/archetypes";
 import { isFlat, luminance } from "../lib/generator/hero-backdrop";
 import { findCorruptedPackText, editDistance } from "../lib/generator/pack-text";
+import { normaliseChannel, parseHex } from "../lib/generator/cutout";
 import {
   geometryFor,
   hasMargin,
@@ -539,6 +540,42 @@ check("a Story clears Instagram's own UI safe zones", () => {
   const geo = geometryFor(placement("meta_story_9x16"));
   ok(clearsStorySafeZone(geo.product), `product box intrudes on the safe zone: ${JSON.stringify(geo.product)}`);
   ok(clearsStorySafeZone(geo.copy), `copy box intrudes on the safe zone: ${JSON.stringify(geo.copy)}`);
+});
+
+// --- Dividing the studio sweep out of the packshot -----------------------------
+
+check("the backdrop divides to white, so it vanishes under multiply", () => {
+  // White is the identity under multiply. That is the whole mechanism: the
+  // sweep maps to 255 and disappears onto any light canvas, leaving no edge to
+  // mismatch and no rectangle.
+  eq(normaliseChannel(229, 229), 255, "a backdrop pixel becomes pure white");
+  eq(normaliseChannel(233, 233), 255, "on every channel");
+});
+
+check("the product survives the division, and its shadow becomes a real one", () => {
+  // The bottle is far darker than the sweep, so it comes through essentially
+  // untouched. The cast shadow maps to a light grey, which multiplies down
+  // onto whatever the canvas is, which is what a shadow does to a surface.
+  ok(normaliseChannel(10, 229) <= 12, "near-black glass stays near-black");
+  const shadow = normaliseChannel(200, 229);
+  ok(shadow > 200 && shadow < 255, `a shadow stays grey, got ${shadow}`);
+});
+
+check("anything brighter than the sweep clips rather than overflowing", () => {
+  // The label is brighter than the backdrop. This is exactly why the obvious
+  // alpha-keyed approach was not used: a luminance key computes negative
+  // opacity there and turns the product's own label transparent.
+  eq(normaliseChannel(250, 229), 255, "clipped, not wrapped");
+});
+
+check("a backdrop too dark to divide by is refused", () => {
+  // Dividing by a dark sweep multiplies noise into the whole frame.
+  eq(normaliseChannel(40, 20), 40, "left alone");
+});
+
+check("a hex ground parses, and anything else is refused", () => {
+  eq(parseHex("#e5e9ea"), [229, 233, 234], "the real niacinamide sweep");
+  eq(parseHex("nonsense"), null, "not a colour");
 });
 
 // --- Pack text on a generated frame -----------------------------------------

@@ -91,7 +91,14 @@ export function geometryFor(p: Placement): Geometry {
       return {
         product: { x: 0.13, y: 0.40, w: 0.74, h: 0.36 },
         copy: { x: 0.08, y: 0.14, w: 0.84, h: 0.24 },
-        align: "start",
+        // Bottom-aligned, so short copy sits against the product instead of
+        // hanging from the top of its box. A Story headline can be three words
+        // or three lines; top-aligning it meant the shortest ones left a hole
+        // in the middle of the frame, which is the "vacant center block" the
+        // creative audit named and which survived the first attempt at fixing
+        // it. Anchoring copy to the product puts the slack above the headline,
+        // where it reads as breathing room under the wordmark.
+        align: "end",
       };
     case "stacked":
     default:

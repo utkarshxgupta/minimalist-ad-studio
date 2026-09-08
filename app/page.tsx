@@ -114,21 +114,42 @@ export default function GeneratePage() {
     // Observed while screenshotting the artboard headlessly, where the capture
     // really was that fast. A person clicking Export rarely is, but "rarely"
     // is how the last export-only defect got shipped.
+    // addEventListener, not `img.onload =`. Assigning the property replaces
+    // whatever handler is already there, and the artboard's own load handler
+    // is what reads the photograph's backdrop and divides it out. The first
+    // version of this guard clobbered it, so on a slow image the packshot
+    // silently kept its studio sweep: a wait added to make the export more
+    // faithful was quietly making it less so.
+    //
+    // The timeout matters as much. A load event that already fired leaves a
+    // listener that never runs, and an export that hangs forever is worse than
+    // one that occasionally captures a frame early.
     const photos = Array.from(board.current.querySelectorAll("img"));
     await Promise.all(
-      photos.map((img) =>
-        img.complete ? Promise.resolve() : new Promise((done) => { img.onload = img.onerror = () => done(null); })
+      photos.map(
+        (img) =>
+          new Promise((done) => {
+            if (img.complete) return done(null);
+            const finish = () => done(null);
+            img.addEventListener("load", finish, { once: true });
+            img.addEventListener("error", finish, { once: true });
+            setTimeout(finish, 3000);
+          })
       )
     );
     // Two frames, so React has flushed the state the load handler set.
     await new Promise(requestAnimationFrame);
     await new Promise(requestAnimationFrame);
 
+    // No cacheBust. It appends a query string to every URL html-to-image
+    // inlines, which is harmless on the image proxy and corrupting on a
+    // `data:` URL, and the packshot is now a data URL whenever its studio
+    // sweep has been divided out. With it on, the export simply never
+    // finished: no error, no timeout, just a promise that never settled.
     const png = await toPng(board.current, {
       width: current.placement.width,
       height: current.placement.height,
       pixelRatio: 1,
-      cacheBust: true,
     });
     const a = document.createElement("a");
     a.href = png;

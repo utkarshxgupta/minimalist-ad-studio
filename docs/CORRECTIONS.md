@@ -561,3 +561,62 @@ source document found live defects in code I had already "responded to". The
 response is not the work. An audit finding is closed when a test asserts it or
 the code visibly changed, and until then it is a note about something still
 broken, however thoroughly it was agreed with.
+
+---
+
+## C-016: The canvas was matched to the packshot instead of the packshot being freed from its sweep
+
+**Claimed.** C-010 and C-011 between them fixed the pasted-rectangle look: the
+canvas adopts the photograph's own studio backdrop, and the synthetic shadow
+that traced the image's four edges is gone.
+
+**Actual.** A user's exported ad still had a grey rectangle round the bottle.
+Measured: the export's canvas was #f6f5f2, the brand fallback, while the photo
+box carried #e5e9ea, the exact colour the sampler should have adopted. So the
+approach had not failed on that product, it had simply not run.
+
+Two causes, both structural rather than unlucky:
+
+*The cached image.* The artboard sampled the backdrop in the image's `onLoad`
+handler. A cached photograph is already `complete` when React mounts, so no
+load event fires and the handler never runs. That is not an edge case, it is
+every render after the first.
+
+*The approach itself.* Matching two colours only works while they agree
+exactly. It cannot survive a photograph whose sweep is a gradient, it puts the
+whole ad's ground at the mercy of whatever colour the photographer used, and
+any timing gap anywhere shows up as the rectangle again.
+
+**Fix.** Stop matching the sweep and remove it. `lib/generator/cutout.ts`
+divides the photograph by its own backdrop colour, which maps the sweep to pure
+white, and the artboard composites the result with `multiply`, under which
+white is the identity. The sweep vanishes onto any light canvas, the bottle
+comes through untouched, and the real cast shadow survives as a grey that
+multiplies down onto the canvas the way a shadow falls on a surface. A hard
+alpha cut-out was rejected: the label is brighter than the sweep, so a
+luminance key computes negative opacity and makes the product's own label
+transparent. The canvas is then free, so it is a quiet brand gradient rather
+than a borrowed photographic grey. The cached-image path is handled with an
+effect that samples on mount when the image is already complete.
+
+**Two bugs found while fixing it, both mine, both from this session.** The
+export guard added in C-015 assigned `img.onload`, which replaced the
+artboard's own handler, so a wait added to make exports more faithful was
+quietly making them less so; it uses `addEventListener` with a timeout now. And
+the blend was first put on the `<img>`, which sits in a positioned wrapper with
+a z-index: that opens a stacking context, a blend mode only composites against
+backdrop painted inside its own context, and the packshot rendered completely
+unblended. It belongs on the wrapper, where the backdrop is the canvas.
+
+**What it says.** Both of the earlier fixes were verified by measuring the
+thing I had just changed, and both times the measurement was true and the
+complaint was still live. This one is verified differently: preview and export
+were captured and their pixels compared, in a real browser, at the point the
+sweep used to be.
+
+**Not fixed, and not claimed to be.** Exporting is slow. Timings in dev ranged
+from 17 seconds with no photograph at all to 40 and then 88 seconds with
+progressively smaller ones, which is noise, not signal. The cost is somewhere
+in rasterising the artboard through an SVG foreignObject and it predates all of
+this. The real fix is server-side rendering in headless Chrome, which was
+identified early in this project and still has not been built.
