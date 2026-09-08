@@ -1,6 +1,6 @@
 import type { ProductFacts, Rule } from "@/lib/types";
 import { loadRulebook, loadDisclosures, registryDigestFor } from "@/lib/standard/loader";
-import { fieldsFor, type CopyField, type Placement } from "./placements";
+import { fieldsFor, META_CTA_OPTIONS, type CopyField, type Placement } from "./placements";
 import type { Archetype } from "./archetypes";
 
 /**
@@ -45,7 +45,7 @@ const FIELD_BRIEF: Record<CopyField, string> = {
   headline: "the hook. The thing that earns the next second of attention.",
   subhead: "one line qualifying the hook.",
   body: "the argument, for a reader who is already zoomed in and studying.",
-  cta: "the action.",
+  cta: `Meta's own call-to-action button, which the platform draws under the image. NOT a line of copy, and not written onto the creative: pick exactly one of ${META_CTA_OPTIONS.join(", ")} and nothing else.`,
   footnote: "the substantiation disclaimer, set as fine print.",
 };
 
@@ -134,12 +134,23 @@ THE IMAGE under ${p.canvasWordLimit}, excluding the footnote.
 
 Write "caption" as the post copy: this is where a real case gets made, and it
 has room for the evidence that does not fit on the image. Several sentences is
-correct here. It is scored against the same rules as everything else.`
+correct here. It is scored against the same rules as everything else.
+
+The call to action is NOT drawn on the image. Meta renders its own button below
+the ad, so "cta" is a selection from that platform's fixed list, and the canvas
+carries no button, no arrow and no "tap here". Writing one on the creative
+ships an ad with two call-to-action buttons and spends words from the canvas
+budget on the one the platform was always going to draw.`
       : `This is a product detail page listing image. The reader has already clicked
 and is zoomed in studying the chemistry, so long copy is correct here and thin
 copy wastes the placement. Aim for the body to do real explanatory work.
 
-There is no caption. The image must stand alone. Leave "caption" empty.`;
+There is no caption. The image must stand alone. Leave "caption" empty.
+
+There is no call to action either. The reader is already on the product page,
+a few hundred pixels from the real buy button, so an image telling them to shop
+now is telling them to do the thing they are in the middle of doing. Leave
+"cta" empty.`;
 
   return `## The placement
 
@@ -180,7 +191,7 @@ function archetypeBlock(facts: ProductFacts, p: Placement, archetype: Archetype)
   // counting it is the check. Both are needed: without the instruction the
   // model reliably writes a paragraph, and without the check nobody finds out.
   const budget = `These words are printed on the creative, so they count against the ${p.canvasWordLimit}-word
-canvas budget above, along with the headline, subhead and cta. Keep them short.
+canvas budget above, along with the headline and subhead. Keep them short.
 `;
 
   switch (archetype) {
@@ -219,7 +230,7 @@ ${NO_TESTIMONIAL}`;
     case "audience":
       return `${header}"audienceGrid" is filled in automatically from the product's own labelled
 fields after you respond, not by you: leave it as {} with every field empty.
-Write the headline, subhead and cta as you normally would, consistent with who
+Write the headline and subhead as you normally would, consistent with who
 the product facts say this is for, since that grid will be shown beside them.
 The grid is wordy on its own and is already spending most of the canvas budget
 above, so keep the headline and subhead tight.
@@ -396,7 +407,7 @@ export const COPY_SCHEMA = {
     headline: { type: "string" },
     subhead: { type: "string" },
     body: { type: "string" },
-    cta: { type: "string" },
+    cta: { type: "string", enum: [...META_CTA_OPTIONS] },
     footnote: { type: "string" },
     caption: { type: "string" },
     checklist: { type: "array", items: { type: "string" } },

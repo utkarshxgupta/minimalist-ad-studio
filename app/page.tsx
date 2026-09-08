@@ -404,10 +404,23 @@ export default function GeneratePage() {
                   />
                 )}
 
-                {attempt.copy.caption && (
+                {(attempt.copy.caption || attempt.copy.cta) && (
                   <div className="mt-4 border border-line bg-card p-3">
-                    <div className="label">Post caption, not on the image</div>
-                    <p className="mt-1 whitespace-pre-wrap text-sm">{attempt.copy.caption}</p>
+                    <div className="label">Ad fields, not on the image</div>
+                    {attempt.copy.caption && (
+                      <p className="mt-1 whitespace-pre-wrap text-sm">{attempt.copy.caption}</p>
+                    )}
+                    {attempt.copy.cta && (
+                      <p className="mt-2 text-sm">
+                        <span className="text-muted">Call-to-action button: </span>
+                        <span className="font-medium">{attempt.copy.cta}</span>
+                      </p>
+                    )}
+                    <p className="mt-2 text-xs text-muted">
+                      Meta draws the call-to-action button itself, under the image, from its own fixed
+                      list. It is set in Ads Manager alongside the caption, so it is not painted onto
+                      the creative and does not spend the canvas word budget.
+                    </p>
                   </div>
                 )}
               </div>

@@ -9,6 +9,13 @@ import { sampleBackdrop, type HeroGround } from "@/lib/generator/hero-backdrop";
 /**
  * The creative, at whatever size the placement asks for.
  *
+ * No call-to-action button is drawn here, deliberately. On a Meta placement the
+ * platform renders its own, in the grey link strip beneath the image, chosen
+ * from a fixed list in Ads Manager; an earlier version painted a second one
+ * onto the canvas, which ships an ad showing two. On a PDP listing image the
+ * reader is already on the product page. `Placement.ctaSurface` is where that
+ * decision lives.
+ *
  * Composed in HTML and CSS over the real product photograph. Invariant 5: the
  * pack, the label and the printed concentration are photographic. A generated
  * label would be a fabricated fact about a real product, which is the same
@@ -500,24 +507,6 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
               >
                 {copy.body}
               </p>
-            )}
-
-            {copy.cta && (
-              <div
-                style={{
-                  alignSelf: "flex-start",
-                  marginTop: Math.round(22 * u),
-                  padding: `${Math.round(14 * u)}px ${Math.round(28 * u)}px`,
-                  background: INK,
-                  color: "#fbf9f5",
-                  borderRadius: 4,
-                  fontSize: Math.round(19 * u),
-                  fontWeight: 500,
-                  ...nowrap,
-                }}
-              >
-                {copy.cta}
-              </div>
             )}
 
             {footnoteInFlow && copy.footnote && (

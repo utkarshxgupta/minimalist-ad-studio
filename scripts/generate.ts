@@ -12,7 +12,7 @@
  *   npm run generate -- <url> --mode creative --hint "warm stone, hard light" --out frame.png
  */
 import { writeFileSync } from "node:fs";
-import { generateAd, adText, ARCHETYPES, type Archetype, type Attempt } from "../lib/generator";
+import { generateAd, canvasText, ARCHETYPES, type Archetype, type Attempt } from "../lib/generator";
 import { PLACEMENTS, type PlacementId } from "../lib/generator/placements";
 
 try {
@@ -47,12 +47,20 @@ const VERDICT_MARK = { PASS: "PASS ", WARN: "WARN ", BLOCK: "BLOCK" };
 
 function printAttempt(a: Attempt, chosen: boolean) {
   console.log(`\n    attempt ${a.index + 1}  ${VERDICT_MARK[a.score.verdict]}${chosen ? "  <- shown" : ""}`);
-  for (const line of adText(a.copy).split("\n")) console.log(`      | ${line}`);
+  // Piped lines are what is printed on the creative. Everything below them
+  // ships with the ad without being drawn on it, which is a distinction the
+  // marketer has to be able to see: the caption and the CTA button are set in
+  // Ads Manager, not in the artwork.
+  for (const line of canvasText(a.copy).split("\n")) console.log(`      | ${line}`);
+  if (a.copy.footnote) console.log(`      | ${a.copy.footnote}`);
   if (a.copy.checklist.length) console.log(`      checklist: ${a.copy.checklist.join(" | ")}`);
   if (a.copy.statBadge?.value) console.log(`      badge: ${a.copy.statBadge.value} (${a.copy.statBadge.label})`);
   for (const b of a.copy.benefitBreakdown) console.log(`      mechanism: ${b.verb}: ${b.mechanism}`);
   for (const s of a.copy.ingredientSynergy) console.log(`      synergy: ${s.ingredient}: ${s.role}`);
   for (const [k, v] of Object.entries(a.copy.audienceGrid ?? {})) console.log(`      audience ${k}: ${v}`);
+  // Ad metadata, not canvas ink: Meta draws this button itself.
+  if (a.copy.caption) console.log(`      caption: ${a.copy.caption}`);
+  if (a.copy.cta) console.log(`      meta cta button: ${a.copy.cta}`);
 
   for (const f of a.score.findings) {
     const where = f.target === "image" ? "image" : `"${f.span}"`;

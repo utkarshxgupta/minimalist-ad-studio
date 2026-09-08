@@ -31,9 +31,17 @@ export function adText(copy: AdCopy): string {
     .join("\n");
 }
 
-/** Just what is rendered on the image. Used for the canvas word budget. */
+/**
+ * Just what is rendered on the image. Used for the canvas word budget.
+ *
+ * The CTA is deliberately not here. On a Meta placement it is the platform's
+ * own button, drawn by Meta in the link strip beneath the image and chosen from
+ * a fixed list in Ads Manager; on a PDP listing there is no CTA at all. It
+ * stays in `adText`, because it is still copy and still gets scored. It is just
+ * not ink on the canvas, so it does not spend the canvas word budget.
+ */
 export function canvasText(copy: AdCopy): string {
-  return [copy.headline, copy.subhead, copy.body, copy.cta, ...blockText(copy)].filter(Boolean).join("\n");
+  return [copy.headline, copy.subhead, copy.body, ...blockText(copy)].filter(Boolean).join("\n");
 }
 
 /**

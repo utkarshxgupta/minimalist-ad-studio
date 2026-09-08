@@ -3,7 +3,7 @@ import { AdCopy, type ClaimTrace, type ProductFacts } from "@/lib/types";
 import { registryDigestFor } from "@/lib/standard/loader";
 import { buildCopyPrompt, factsBlock, COPY_SCHEMA, type Archetype, type Brief, type Mode } from "./prompt";
 import { adText, canvasWordCount } from "./ad-text";
-import { fieldsFor, type CopyField, type Placement } from "./placements";
+import { fieldsFor, isMetaCta, type CopyField, type Placement } from "./placements";
 
 /**
  * Stage 3: write the copy.
@@ -105,6 +105,13 @@ export function clearUnusedFields(
   const out = { ...copy };
   for (const f of ALL_FIELDS) if (!used.has(f)) out[f] = "";
   if (!placement.hasCaption) out.caption = "";
+
+  // The CTA is a value the advertiser selects in Ads Manager, from Meta's own
+  // fixed list. A placement with no platform button gets none at all, and a
+  // written-out line like "Discover the science" is dropped rather than shown,
+  // because it is not something anyone can enter into the platform. The prompt
+  // constrains this too; this is the check, not the instruction.
+  if (placement.ctaSurface === "none" || !isMetaCta(out.cta)) out.cta = "";
 
   // Photographic mode gets none of the creative-mode elements regardless of
   // what the model returned. The prompt already says so; this is the check,

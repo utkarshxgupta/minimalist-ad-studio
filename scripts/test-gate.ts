@@ -16,7 +16,7 @@ import { scoreAd } from "../lib/scorer";
 import { avoidList, chooseBest, decide, shouldRetry, MAX_WARN_RETRIES, type Attempt } from "../lib/generator/gate";
 import { verifyClaimTrace, verifyStatBadge, verifyIngredientSynergy, clearUnusedFields, adText } from "../lib/generator/copy";
 import { sanitiseHint, buildScenePrompt } from "../lib/generator/creative";
-import { PLACEMENT_LIST, fieldsFor, placement } from "../lib/generator/placements";
+import { PLACEMENT_LIST, fieldsFor, isMetaCta, placement } from "../lib/generator/placements";
 import { canvasWordCount } from "../lib/generator/ad-text";
 import { tooWordyFor } from "../lib/generator/archetypes";
 import { isFlat, luminance } from "../lib/generator/hero-backdrop";
@@ -236,9 +236,61 @@ check("grounding is not defeated by punctuation or case", () => {
   eq(verifyClaimTrace(FACTS, copy), [], "whitespace and case are normalised");
 });
 
-check("the scored text is exactly what the artboard shows", () => {
+check("everything that ships is scored, including the fields off the canvas", () => {
+  // adText is the scorer's view, so it carries the platform CTA and the caption
+  // even though neither is drawn on the image. A CTA is still copy: "Order Now"
+  // under a claim the ad cannot support is still an ad making that claim.
   const copy = copyWith([]);
   eq(adText(copy), "Clear skin, earned\nReduces Acne, Blackheads & Excessive Oil\nShop Now", "ad text");
+});
+
+// --- The call to action lives on the platform, not the canvas ----------------
+
+check("the CTA does not spend the canvas word budget", () => {
+  // Regression, and the reason it existed: the artboard painted its own black
+  // "Shop Now" button, so every Meta ad shipped with two of them, Meta's and
+  // ours, and words from a fifteen-word budget went on the one the platform
+  // was always going to draw anyway.
+  const copy: AdCopy = { ...copyWith([], ""), headline: "one two three", cta: "Shop Now" };
+  eq(canvasWordCount(copy), 3, "the button is not ink on the canvas");
+  ok(adText(copy).includes("Shop Now"), "but it is still scored");
+});
+
+check("a listing image gets no call to action at all", () => {
+  // The reader is already on the product page, a few hundred pixels from the
+  // real buy button.
+  const pdp = placement("pdp_listing_11x16");
+  eq(pdp.ctaSurface, "none", "no platform button on a PDP listing");
+  const copy = clearUnusedFields({ ...copyWith([]), cta: "Shop Now" }, FACTS, pdp, "photographic", "statement");
+  eq(copy.cta, "", "dropped");
+});
+
+check("a CTA Meta does not offer is dropped rather than shown", () => {
+  // This value is selected from a dropdown in Ads Manager, so a written-out
+  // line is not something anyone can enter into the platform. It is not handed
+  // over as though it were.
+  const square = placement("meta_square_1x1");
+  eq(square.ctaSurface, "platform", "Meta draws its own button");
+
+  const written = clearUnusedFields(
+    { ...copyWith([]), cta: "Discover the science" },
+    FACTS,
+    square,
+    "photographic",
+    "statement"
+  );
+  eq(written.cta, "", "free text is not a Meta CTA");
+
+  const picked = clearUnusedFields({ ...copyWith([]), cta: "Learn More" }, FACTS, square, "photographic", "statement");
+  eq(picked.cta, "Learn More", "one of Meta's own options survives");
+});
+
+check("every Meta placement declares a platform button, and only Meta's own list counts", () => {
+  for (const p of PLACEMENT_LIST) {
+    eq(p.ctaSurface, p.channel === "meta" ? "platform" : "none", `${p.id} cta surface`);
+  }
+  ok(isMetaCta("Shop Now"), "the default Meta CTA");
+  ok(!isMetaCta("Buy Now"), "close, but not one Meta offers");
 });
 
 // --- Creative-mode prop, layer 1 --------------------------------------------

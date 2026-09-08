@@ -55,6 +55,25 @@ export interface Placement {
   canvasWordLimit: number;
   /** Meta placements write deep copy into the post caption, not onto the image. */
   hasCaption: boolean;
+  /**
+   * Where this placement's call to action actually lives.
+   *
+   * "platform": Meta renders its own CTA button, in the grey link strip under
+   * the image, from a fixed list the advertiser picks in Ads Manager. It is ad
+   * metadata, a sibling of the headline and primary text, not part of the
+   * creative. Painting a "Shop Now" button onto the canvas as well ships an ad
+   * with two of them, and spends canvas words from a fifteen-word budget on a
+   * button the platform was going to draw anyway.
+   *
+   * "none": the reader is already on the product page with the real buy button
+   * a few hundred pixels away. A listing image telling them to shop now is
+   * telling them to do the thing they are in the middle of doing.
+   *
+   * There is deliberately no "canvas" value yet. The brand does put a CTA
+   * inside its own website banners, because a web banner is itself the click
+   * target, but this tool does not generate that placement.
+   */
+  ctaSurface: "platform" | "none";
   /** Layout family the artboard renders. */
   layout: "split" | "stacked" | "tall";
   /**
@@ -78,6 +97,7 @@ export const PLACEMENTS: Record<PlacementId, Placement> = {
     fields: { headline: 52, subhead: 62, cta: 22, footnote: 96 },
     canvasWordLimit: 15,
     hasCaption: true,
+    ctaSurface: "platform",
     layout: "stacked",
     imageAspect: "4:5",
   },
@@ -90,6 +110,7 @@ export const PLACEMENTS: Record<PlacementId, Placement> = {
     fields: { headline: 52, subhead: 62, cta: 22, footnote: 96 },
     canvasWordLimit: 15,
     hasCaption: true,
+    ctaSurface: "platform",
     layout: "split",
     imageAspect: "1:1",
   },
@@ -102,6 +123,7 @@ export const PLACEMENTS: Record<PlacementId, Placement> = {
     fields: { headline: 42, subhead: 48, cta: 20, footnote: 96 },
     canvasWordLimit: 12,
     hasCaption: true,
+    ctaSurface: "platform",
     layout: "tall",
     imageAspect: "9:16",
   },
@@ -113,9 +135,10 @@ export const PLACEMENTS: Record<PlacementId, Placement> = {
     height: 1600,
     // The dominant format in the brand's own listing library, and the one place
     // long copy belongs: the buyer is zoomed in and reading.
-    fields: { headline: 62, subhead: 96, body: 340, cta: 24, footnote: 110 },
+    fields: { headline: 62, subhead: 96, body: 340, footnote: 110 },
     canvasWordLimit: 90,
     hasCaption: false,
+    ctaSurface: "none",
     layout: "stacked",
     imageAspect: "3:4",
   },
@@ -136,3 +159,20 @@ export function fieldsFor(p: Placement): CopyField[] {
   return (Object.keys(p.fields) as CopyField[]).filter((f) => (p.fields[f] ?? 0) > 0);
 }
 
+
+/**
+ * Meta's own call-to-action buttons, as offered in Ads Manager.
+ *
+ * A fixed list, not free text, because this is a value the advertiser selects
+ * from a dropdown when the ad is built. A generator that writes "Discover the
+ * science" here has produced something nobody can enter into the platform.
+ * Trimmed to the ones a direct-to-consumer skincare advertiser would actually
+ * pick; the full enum is longer and includes things like Book Now and Donate.
+ */
+export const META_CTA_OPTIONS = ["Shop Now", "Learn More", "Get Offer", "Order Now", "Sign Up"] as const;
+
+export type MetaCta = (typeof META_CTA_OPTIONS)[number];
+
+export function isMetaCta(value: string): value is MetaCta {
+  return (META_CTA_OPTIONS as readonly string[]).includes(value);
+}
