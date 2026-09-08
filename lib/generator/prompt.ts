@@ -1,6 +1,7 @@
 import type { ProductFacts, Rule } from "@/lib/types";
 import { loadRulebook, loadDisclosures, registryDigestFor } from "@/lib/standard/loader";
 import { fieldsFor, type CopyField, type Placement } from "./placements";
+import type { Archetype } from "./archetypes";
 
 /**
  * Photographic: the default. Real photo, flat canvas, no image model call.
@@ -8,6 +9,16 @@ import { fieldsFor, type CopyField, type Placement } from "./placements";
  * elements observed on the brand's own homepage banners.
  */
 export type Mode = "photographic" | "creative";
+
+/**
+ * The archetypes themselves live in `./archetypes`, which imports nothing, so
+ * the generator form in the browser can read the list without dragging the
+ * rulebook loader and its filesystem calls into the client bundle. Re-exported
+ * here because this is where they become instructions, and it is the import
+ * every caller already reaches for.
+ */
+export { ARCHETYPES, DEFAULT_ARCHETYPE, isArchetype } from "./archetypes";
+export type { Archetype, ArchetypeSpec } from "./archetypes";
 
 /**
  * The generation prompt, assembled from `standard/` at runtime.
@@ -51,6 +62,17 @@ export function factsBlock(facts: ProductFacts): string {
     ? facts.trustBadges.map((b) => `- ${b}`).join("\n")
     : "- (none stated on the page)";
 
+  const ingredientNotes = facts.ingredientNotes.length
+    ? facts.ingredientNotes.map((n) => `- ${n.ingredient}: ${n.note}`).join("\n")
+    : "- (no per-ingredient descriptions could be read from the page)";
+
+  const audience = facts.audience
+    ? Object.entries(facts.audience)
+        .filter(([, v]) => v)
+        .map(([k, v]) => `- ${k}: ${v}`)
+        .join("\n")
+    : "- (none stated on the page)";
+
   return `Product name: ${facts.name}
 Source: ${facts.url}
 
@@ -62,6 +84,12 @@ ${benefits}
 
 Formulation trust badges stated on the product page:
 ${badges}
+
+What each named ingredient does, per the product's own ingredient tabs:
+${ingredientNotes}
+
+Who this is for and how to use it, per the product's own labelled fields:
+${audience}
 
 Full page copy:
 ${facts.rawText}`;
@@ -125,32 +153,84 @@ ${fields}`;
 }
 
 /**
- * The disclosure requirement.
- *
- * Loaded from standard/disclosures.yaml rather than hardcoded, and the prompt
- * says the wording is fixed, because a disclaimer a model paraphrases is a
- * disclaimer that can quietly stop naming who ran the study.
+ * The rule every archetype shares, stated once. A testimonial card sits
+ * beside every one of these on the real site and none of them produce one:
+ * it needs a real reviewer's name and real words, and a model asked to
+ * supply both is inventing a customer, a fabricated testimonial regardless of
+ * how the copy praises the product. POLICY-009 and POLICY-010 exist for
+ * testimonials that overreach; a testimonial that does not exist overreaches
+ * by definition.
  */
-/**
- * Creative-mode elements: the checklist and the stat badge.
- *
- * Both observed directly on beminimalist.co's own homepage banners
- * ("Recommended by dermatologists", "For every skin type and concern" as a
- * checklist; "150k+ Positive Reviews" as a bordered stat badge), not invented.
- * What is NOT taken from those banners is the testimonial card that sits
- * alongside them. A testimonial card needs a real reviewer's name and real
- * words, and a model asked to supply both would be inventing a customer,
- * which is a fabricated testimonial regardless of how the copy praises the
- * product. POLICY-009 and POLICY-010 exist for testimonials that overreach;
- * a testimonial that does not exist overreaches by definition. So this
- * generator does not produce one. A marketer can add a real quote by hand.
- */
-function creativeElementsBlock(facts: ProductFacts): string {
-  return `\n## Creative-mode elements
+const NO_TESTIMONIAL = `Do NOT write a testimonial, a customer quote, a reviewer name, or a star
+rating. Those elements exist on the real site but require a real customer,
+which this tool does not have. Inventing one is a fabricated testimonial.`;
 
-Two additional elements are available, both seen on the brand's own homepage
-banners. Use either, both, or neither: an empty ad is safer than a decorated
-one that has to invent something to fill the space.
+/**
+ * Creative-mode content blocks, one per archetype. Every one of these is a
+ * real, repeating structure on the brand's own homepage banners, not an
+ * invented layout: this function decides which fields the model is asked to
+ * fill in, and every field it fills is grounded exactly like a claim in the
+ * body copy is.
+ */
+function archetypeBlock(facts: ProductFacts, p: Placement, archetype: Archetype): string {
+  const header = `\n## Creative-mode element: ${archetype}\n\n`;
+
+  // The block is printed on the canvas next to the headline, so it spends the
+  // same word budget. Saying so here is the instruction; `overLengthFields`
+  // counting it is the check. Both are needed: without the instruction the
+  // model reliably writes a paragraph, and without the check nobody finds out.
+  const budget = `These words are printed on the creative, so they count against the ${p.canvasWordLimit}-word
+canvas budget above, along with the headline, subhead and cta. Keep them short.
+`;
+
+  switch (archetype) {
+    case "mechanism":
+      return `${header}"benefitBreakdown": one to three entries, each a short bold action verb
+("FIGHTS ACNE", "REGULATES SEBUM") plus one sentence of mechanism, the pattern
+the corpus uses ("FIGHTS ACNE: provides potent anti-microbial activity against
+p-acne bacteria"). The verb is a label; the mechanism sentence is the part that
+must be a fact from the product facts block above, so add a claimTrace entry
+for each mechanism sentence exactly as you would for a claim in the body copy.
+Two entries usually reads better than three, and keep each mechanism to one
+clause of around ten words, as in the corpus example. A full paragraph in this
+element is wrong for the format.
+Leave "checklist", "statBadge", "ingredientSynergy" and "audienceGrid" empty.
+
+${budget}
+
+${NO_TESTIMONIAL}`;
+
+    case "synergy":
+      return `${header}"ingredientSynergy": one to three entries, each a named ingredient from the
+product facts above and a short phrase for what it does. The ingredient must
+be one that is actually named in "What each named ingredient does" above; the
+role phrase must be grounded there too, so add a claimTrace entry for each
+role phrase exactly as you would for a claim in the body copy. Do not invent a
+synergy between two ingredients that the product's own ingredient tabs never
+described as working together; state what each one does on its own if that is
+all the page supports. The role is a phrase, not a sentence: a handful of words
+each, since three of these sit stacked on the creative.
+Leave "checklist", "statBadge", "benefitBreakdown" and "audienceGrid" empty.
+
+${budget}
+
+${NO_TESTIMONIAL}`;
+
+    case "audience":
+      return `${header}"audienceGrid" is filled in automatically from the product's own labelled
+fields after you respond, not by you: leave it as {} with every field empty.
+Write the headline, subhead and cta as you normally would, consistent with who
+the product facts say this is for, since that grid will be shown beside them.
+The grid is wordy on its own and is already spending most of the canvas budget
+above, so keep the headline and subhead tight.
+Leave "checklist", "statBadge", "benefitBreakdown" and "ingredientSynergy" empty.
+
+${NO_TESTIMONIAL}`;
+
+    case "statement":
+    default:
+      return `${header}Two elements are available. Use either, both, or neither: an empty ad is safer
+than a decorated one that has to invent something to fill the space.
 
 "checklist": zero to three short benefit bullets, each one a fact from the
 product facts block above, not a rephrasing of the headline. Each item is
@@ -174,11 +254,21 @@ this element.
 Studies registered for ${facts.name}:
 ${registryDigestFor(facts.name)}
 
-Do NOT write a testimonial, a customer quote, a reviewer name, or a star
-rating. Those elements exist on the real site but require a real customer,
-which this tool does not have. Inventing one is a fabricated testimonial.`;
+Leave "benefitBreakdown", "ingredientSynergy" and "audienceGrid" empty.
+
+${budget}
+
+${NO_TESTIMONIAL}`;
+  }
 }
 
+/**
+ * The disclosure requirement.
+ *
+ * Loaded from standard/disclosures.yaml rather than hardcoded, and the prompt
+ * says the wording is fixed, because a disclaimer a model paraphrases is a
+ * disclaimer that can quietly stop naming who ran the study.
+ */
 function disclosureBlock(p: Placement): string {
   if (!fieldsFor(p).includes("footnote")) return "";
 
@@ -224,7 +314,8 @@ export function buildCopyPrompt(
   placement: Placement,
   brief: Brief = {},
   avoid: string[] = [],
-  mode: Mode = "photographic"
+  mode: Mode = "photographic",
+  archetype: Archetype = "statement"
 ): string {
   const book = loadRulebook();
 
@@ -281,8 +372,8 @@ attach the evidence, or drop the claim. Do not hedge a claim into vagueness and
 call it compliant: "may help support skin wellness" is worse copy and no safer.
 ${disclosureBlock(placement)}${
     mode === "creative"
-      ? creativeElementsBlock(facts)
-      : `\n## Two fields you always leave empty\n\nSet "checklist" to an empty array and "statBadge" to {} with both fields empty. Those elements are for creative mode only.\n`
+      ? archetypeBlock(facts, placement, archetype)
+      : `\n## Five fields you always leave empty\n\nSet "checklist" and "benefitBreakdown" and "ingredientSynergy" to empty arrays, and "statBadge" and "audienceGrid" to {} with every field empty. Those elements are for creative mode only.\n`
   }${avoidBlock}
 ## The claim trace
 
@@ -313,6 +404,31 @@ export const COPY_SCHEMA = {
       type: "object",
       properties: { value: { type: "string" }, label: { type: "string" } },
     },
+    benefitBreakdown: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { verb: { type: "string" }, mechanism: { type: "string" } },
+        required: ["verb", "mechanism"],
+      },
+    },
+    ingredientSynergy: {
+      type: "array",
+      items: {
+        type: "object",
+        properties: { ingredient: { type: "string" }, role: { type: "string" } },
+        required: ["ingredient", "role"],
+      },
+    },
+    audienceGrid: {
+      type: "object",
+      properties: {
+        concerns: { type: "string" },
+        skinType: { type: "string" },
+        howToUse: { type: "string" },
+        timing: { type: "string" },
+      },
+    },
     claimTrace: {
       type: "array",
       items: {
@@ -325,5 +441,18 @@ export const COPY_SCHEMA = {
       },
     },
   },
-  required: ["headline", "subhead", "body", "cta", "footnote", "caption", "checklist", "statBadge", "claimTrace"],
+  required: [
+    "headline",
+    "subhead",
+    "body",
+    "cta",
+    "footnote",
+    "caption",
+    "checklist",
+    "statBadge",
+    "benefitBreakdown",
+    "ingredientSynergy",
+    "audienceGrid",
+    "claimTrace",
+  ],
 } as const;

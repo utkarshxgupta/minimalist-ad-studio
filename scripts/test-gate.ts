@@ -14,9 +14,11 @@ import { check, checkAsync, eq, ok, report } from "./assert";
 import type { AdCopy, Finding, ProductFacts, ScoreResult, Verdict } from "../lib/types";
 import { scoreAd } from "../lib/scorer";
 import { avoidList, chooseBest, decide, shouldRetry, MAX_WARN_RETRIES, type Attempt } from "../lib/generator/gate";
-import { verifyClaimTrace, verifyStatBadge, adText } from "../lib/generator/copy";
+import { verifyClaimTrace, verifyStatBadge, verifyIngredientSynergy, clearUnusedFields, adText } from "../lib/generator/copy";
 import { sanitiseHint, buildPropPrompt } from "../lib/generator/creative";
-import { PLACEMENT_LIST, canvasWordCount, fieldsFor, placement } from "../lib/generator/placements";
+import { PLACEMENT_LIST, fieldsFor, placement } from "../lib/generator/placements";
+import { canvasWordCount } from "../lib/generator/ad-text";
+import { tooWordyFor } from "../lib/generator/archetypes";
 import {
   geometryFor,
   hasMargin,
@@ -32,6 +34,8 @@ const FACTS: ProductFacts = {
   actives: [{ ingredient: "Salicylic Acid", concentration: "2%" }],
   statedBenefits: ["Reduces Acne, Blackheads & Excessive Oil"],
   trustBadges: ["Fragrance Free", "Non-comedogenic", "pH: 3.2 - 4.0"],
+  ingredientNotes: [{ ingredient: "Salicylic Acid", note: "A BHA that exfoliates inside the pore." }],
+  audience: { concerns: "Acne, Blackheads", ageSuitability: "16+ years of age", timing: "AM & PM" },
   heroImageUrl: "https://cdn.shopify.com/x.png",
   rawText: "Salicylic Acid 2% Face Serum\nReduces Acne, Blackheads & Excessive Oil",
 };
@@ -77,6 +81,9 @@ function attempt(over: Partial<Attempt> = {}): Attempt {
       caption: "",
       checklist: [],
       statBadge: {},
+      benefitBreakdown: [],
+      ingredientSynergy: [],
+      audienceGrid: {},
       claimTrace: [],
     },
     score: score("PASS"),
@@ -188,6 +195,9 @@ function copyWith(trace: AdCopy["claimTrace"], body = "Reduces Acne, Blackheads 
     caption: "",
     checklist: [],
     statBadge: {},
+    benefitBreakdown: [],
+    ingredientSynergy: [],
+    audienceGrid: {},
     claimTrace: trace,
   };
 }
@@ -289,6 +299,115 @@ check("an empty stat badge needs no grounding", () => {
   eq(verifyStatBadge(FACTS, copyWith([])).length, 0, "nothing to check");
 });
 
+// --- The creative archetypes -------------------------------------------------
+
+check("a synergy naming an ingredient the page describes is grounded", () => {
+  const copy = {
+    ...copyWith([]),
+    ingredientSynergy: [{ ingredient: "Salicylic Acid", role: "exfoliates inside the pore" }],
+  };
+  eq(verifyIngredientSynergy(FACTS, copy), [], "the page's own ingredient tab names this one");
+});
+
+check("a synergy naming an ingredient the product does not contain is caught", () => {
+  // The claim trace alone cannot catch this. An ingredient name is often a
+  // single word that appears somewhere in a page of prose without being one of
+  // this product's actives, so the name is checked against the ingredient tabs
+  // directly rather than against the facts haystack.
+  const copy = {
+    ...copyWith([]),
+    ingredientSynergy: [{ ingredient: "Retinol", role: "accelerates cell turnover" }],
+  };
+  eq(verifyIngredientSynergy(FACTS, copy).length, 1, "Retinol is not in this product");
+});
+
+check("matching an ingredient is not defeated by case or spacing", () => {
+  const copy = { ...copyWith([]), ingredientSynergy: [{ ingredient: "salicylic  acid", role: "exfoliates" }] };
+  eq(verifyIngredientSynergy(FACTS, copy), [], "normalised the same way every other check is");
+});
+
+check("every creative-mode block is text the scorer reads", () => {
+  // A claim that only ever appears inside a mechanism sentence or a grid cell
+  // is still printed on the finished creative. If adText did not carry it, the
+  // scorer would pass an ad on the strength of the copy it happened to look at.
+  const copy: AdCopy = {
+    ...copyWith([]),
+    benefitBreakdown: [{ verb: "FIGHTS ACNE", mechanism: "reduces p-acnes bacteria" }],
+    ingredientSynergy: [{ ingredient: "Salicylic Acid", role: "exfoliates inside the pore" }],
+    audienceGrid: { concerns: "Acne, Blackheads", timing: "AM & PM" },
+  };
+  const text = adText(copy);
+  for (const fragment of ["FIGHTS ACNE", "reduces p-acnes bacteria", "exfoliates inside the pore", "AM & PM"]) {
+    ok(text.includes(fragment), `adText should carry "${fragment}"`);
+  }
+});
+
+const SQUARE = placement("meta_square_1x1");
+
+function everyBlock(): AdCopy {
+  return {
+    ...copyWith([]),
+    checklist: ["Fragrance Free"],
+    statBadge: { value: "93%", label: "reduction in active acne" },
+    benefitBreakdown: [{ verb: "FIGHTS ACNE", mechanism: "reduces p-acnes bacteria" }],
+    ingredientSynergy: [{ ingredient: "Salicylic Acid", role: "exfoliates inside the pore" }],
+    audienceGrid: { concerns: "invented", skinType: "invented", howToUse: "invented", timing: "invented" },
+  };
+}
+
+check("only the chosen archetype's block survives, whatever the model returned", () => {
+  // The prompt tells the model to leave the other blocks empty. This is what
+  // makes that true when it does not listen, which matters because a stray
+  // block is not a cosmetic problem: it is unrequested copy on a finished
+  // creative that nobody asked a reviewer to look at.
+  const mechanism = clearUnusedFields(everyBlock(), FACTS, SQUARE, "creative", "mechanism");
+  eq(mechanism.checklist, [], "checklist dropped");
+  eq(mechanism.statBadge, {}, "stat badge dropped");
+  eq(mechanism.ingredientSynergy, [], "synergy dropped");
+  eq(mechanism.benefitBreakdown.length, 1, "its own block kept");
+
+  const synergy = clearUnusedFields(everyBlock(), FACTS, SQUARE, "creative", "synergy");
+  eq(synergy.benefitBreakdown, [], "mechanism dropped");
+  eq(synergy.ingredientSynergy.length, 1, "its own block kept");
+});
+
+check("photographic mode renders no creative block at all", () => {
+  const copy = clearUnusedFields(everyBlock(), FACTS, SQUARE, "photographic", "mechanism");
+  eq(copy.checklist, [], "checklist");
+  eq(copy.statBadge, {}, "stat badge");
+  eq(copy.benefitBreakdown, [], "mechanism");
+  eq(copy.ingredientSynergy, [], "synergy");
+  eq(copy.audienceGrid, {}, "audience grid");
+});
+
+check("the audience grid is taken from the facts, never from the model", () => {
+  // Every value the model supplied here said "invented". None of them survive:
+  // this content is already structured and exact on the product page, so it is
+  // transcribed in code. A model asked to copy structured facts will usually
+  // do it, and "usually" is not a control.
+  const copy = clearUnusedFields(everyBlock(), FACTS, SQUARE, "creative", "audience");
+  eq(copy.audienceGrid.concerns, "Acne, Blackheads", "concerns, verbatim from the page");
+  eq(copy.audienceGrid.skinType, "16+ years of age", "the page's age suitability");
+  eq(copy.audienceGrid.timing, "AM & PM", "timing");
+  eq(copy.audienceGrid.howToUse, undefined, "a field the page does not state stays absent");
+});
+
+check("the wordy archetype is flagged for short formats and cleared for the listing", () => {
+  // The advisory in the generator form and the layout note the generator
+  // reports afterwards have to agree, or the form is lying to save a minute.
+  for (const p of PLACEMENT_LIST) {
+    const flagged = tooWordyFor("audience", p.canvasWordLimit);
+    eq(flagged, p.channel === "meta", `${p.id} (limit ${p.canvasWordLimit})`);
+  }
+  eq(tooWordyFor("synergy", placement("meta_story_9x16").canvasWordLimit), false, "a short block is fine anywhere");
+});
+
+check("a product page stating no audience fields produces no grid", () => {
+  const noAudience: ProductFacts = { ...FACTS, audience: undefined };
+  const copy = clearUnusedFields(everyBlock(), noAudience, SQUARE, "creative", "audience");
+  eq(copy.audienceGrid, {}, "nothing to show beats a grid of invented cells");
+});
+
 // --- Artboard geometry -------------------------------------------------------
 
 check("the product never touches the canvas edge, on any layout", () => {
@@ -337,8 +456,28 @@ check("the creative-mode prop never sits behind the product, on any layout", () 
 check("the footnote does not count against the canvas word budget", () => {
   // It is fine print carrying the disclaimer. Counting it would push a
   // compliant ad over the limit for being compliant.
-  const words = canvasWordCount({ headline: "one two three", footnote: "a b c d e f g h" });
-  eq(words, 3, "word count");
+  const copy: AdCopy = {
+    ...copyWith([], ""),
+    headline: "one two three",
+    cta: "",
+    footnote: "a b c d e f g h",
+  };
+  eq(canvasWordCount(copy), 3, "word count");
+});
+
+check("a creative-mode block counts against the canvas word budget", () => {
+  // Regression, found by looking at a live run rather than by reasoning: the
+  // count was assembled from a hand-written list of the four original fields,
+  // so a mechanism block put roughly forty words on a Meta square whose limit
+  // is fifteen and nothing was reported. Ink on the canvas is ink on the
+  // canvas, whichever field it arrived in.
+  const bare: AdCopy = { ...copyWith([], ""), headline: "one two three", cta: "" };
+  const withBlock: AdCopy = {
+    ...bare,
+    benefitBreakdown: [{ verb: "REGULATES SEBUM", mechanism: "balances oil without stripping skin" }],
+  };
+  eq(canvasWordCount(bare), 3, "baseline");
+  eq(canvasWordCount(withBlock), 10, "the mechanism block is counted too");
 });
 
 check("a placement only asks for the fields it renders", () => {

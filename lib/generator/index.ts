@@ -4,7 +4,7 @@ import { generateCreativeProp, scoreCreativeProp, type PropResult } from "./crea
 import { adText, generateCopy } from "./copy";
 import { getProductFacts, type FactsResult } from "./facts";
 import { avoidList, chooseBest, decide, shouldRetry, type Attempt, type GateDecision } from "./gate";
-import type { Brief, Mode } from "./prompt";
+import type { Archetype, Brief, Mode } from "./prompt";
 import {
   DEFAULT_PLACEMENT,
   placement as getPlacement,
@@ -37,6 +37,11 @@ export interface GenerationOptions extends Brief {
   /** Placements to produce. Defaults to the square feed unit. */
   placements?: PlacementId[];
   mode?: Mode;
+  /**
+   * Which creative-mode content block to write. Ignored in photographic
+   * mode, which renders none of them.
+   */
+  archetype?: Archetype;
   /** Style direction for the creative-mode prop. Deny-list checked before it reaches an image model. */
   propHint?: string;
 }
@@ -59,6 +64,8 @@ export interface GenerationRun {
   fallbackReason?: string;
 
   mode: Mode;
+  /** Which content block the creative-mode ads carry. Recorded, not inferred from the copy. */
+  archetype: Archetype;
   /** The one generated prop, shared across every placement. Absent in photographic mode. */
   prop?: PropResult;
   propError?: string;
@@ -71,6 +78,7 @@ export interface GenerationRun {
 export async function generateAd(url: string, opts: GenerationOptions = {}): Promise<GenerationRun> {
   const facts = await getProductFacts(url);
   const mode: Mode = opts.mode ?? "photographic";
+  const archetype: Archetype = opts.archetype ?? "statement";
   const placements = (opts.placements?.length ? opts.placements : [DEFAULT_PLACEMENT]).map(getPlacement);
 
   // One prop for the whole run, not one per placement. It is a small
@@ -84,7 +92,7 @@ export async function generateAd(url: string, opts: GenerationOptions = {}): Pro
   // Placements run in parallel. They share nothing but the facts and the mode.
   const runs = await Promise.all(
     placements.map(async (p): Promise<PlacementRun> => {
-      const attempts = await generateForPlacement(facts.facts, p, opts, factsContext, mode);
+      const attempts = await generateForPlacement(facts.facts, p, opts, factsContext, mode, archetype);
       const job = await propJob;
 
       // Prop findings attach to every attempt, because the prop is the same
@@ -110,6 +118,7 @@ export async function generateAd(url: string, opts: GenerationOptions = {}): Pro
     factWarnings: facts.warnings,
     fallbackReason: facts.fallbackReason,
     mode,
+    archetype,
     prop: propOutcome?.prop,
     propError: propOutcome?.error,
     placements: runs,
@@ -128,14 +137,15 @@ async function generateForPlacement(
   p: Placement,
   opts: GenerationOptions,
   factsContext: string,
-  mode: Mode
+  mode: Mode,
+  archetype: Archetype
 ): Promise<Attempt[]> {
   const attempts: Attempt[] = [];
   let avoid: string[] = [];
   let retriesUsed = 0;
 
   for (;;) {
-    const result = await generateCopy(facts, p, opts, avoid, mode);
+    const result = await generateCopy(facts, p, opts, avoid, mode, archetype);
     const score = await scoreAd(adText(result.copy), { factsContext });
 
     const attempt: Attempt = {
@@ -206,4 +216,5 @@ function mergeFindings(score: ScoreResult, imageFindings: Finding[]): ScoreResul
 export { adText, canvasText } from "./copy";
 export type { Attempt, GateDecision } from "./gate";
 export type { Placement, PlacementId } from "./placements";
-export type { Mode } from "./prompt";
+export { ARCHETYPES } from "./prompt";
+export type { Archetype, Mode } from "./prompt";

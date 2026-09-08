@@ -7,20 +7,15 @@ import { FindingList, HighlightedCopy } from "@/components/Findings";
 import { ScorePanel, VerdictBadge } from "@/components/Verdict";
 import { CATALOGUE, productUrl } from "@/lib/generator/catalogue";
 import { DEFAULT_PLACEMENT, PLACEMENT_LIST, type PlacementId } from "@/lib/generator/placements";
+import { ARCHETYPES, DEFAULT_ARCHETYPE, tooWordyFor, type Archetype } from "@/lib/generator/archetypes";
+// The scorer's own definition of the ad text, not a second one written for the
+// browser. The local copy this replaced had already fallen behind: it did not
+// know about the checklist, so a finding quoting a checklist bullet found
+// nothing to highlight and rendered as unmarked text.
+import { adText } from "@/lib/generator/ad-text";
 import type { GenerationRun, Mode, PlacementRun } from "@/lib/generator";
 import { decide } from "@/lib/generator/gate";
 import { logOverride, readOverrides, type OverrideEntry } from "@/lib/overrides";
-
-function adText(copy: {
-  headline: string;
-  subhead: string;
-  body: string;
-  cta: string;
-  footnote: string;
-  caption: string;
-}): string {
-  return [copy.headline, copy.subhead, copy.body, copy.cta, copy.footnote, copy.caption].filter(Boolean).join("\n");
-}
 
 export default function GeneratePage() {
   const [url, setUrl] = useState(productUrl(CATALOGUE[1].handle));
@@ -28,6 +23,7 @@ export default function GeneratePage() {
   const [audience, setAudience] = useState("");
   const [placements, setPlacements] = useState<PlacementId[]>([DEFAULT_PLACEMENT]);
   const [mode, setMode] = useState<Mode>("photographic");
+  const [archetype, setArchetype] = useState<Archetype>(DEFAULT_ARCHETYPE);
   const [hint, setHint] = useState("");
 
   const [busy, setBusy] = useState(false);
@@ -39,6 +35,11 @@ export default function GeneratePage() {
   const [overrides, setOverrides] = useState<OverrideEntry[]>([]);
 
   const board = useRef<HTMLDivElement>(null);
+
+  const tightForArchetype =
+    mode === "creative"
+      ? PLACEMENT_LIST.filter((p) => placements.includes(p.id) && tooWordyFor(archetype, p.canvasWordLimit))
+      : [];
 
   function togglePlacement(id: PlacementId) {
     setPlacements((prev) =>
@@ -55,7 +56,7 @@ export default function GeneratePage() {
       const res = await fetch("/api/generate", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ url, angle, audience, placements, mode, propHint: hint }),
+        body: JSON.stringify({ url, angle, audience, placements, mode, archetype, propHint: hint }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Generation failed");
@@ -216,18 +217,45 @@ export default function GeneratePage() {
             </p>
           ) : (
             <>
+              <div className="label mt-3">Content block</div>
+              <select
+                className="field mt-1"
+                value={archetype}
+                onChange={(e) => setArchetype(e.target.value as Archetype)}
+              >
+                {ARCHETYPES.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-2 text-xs text-muted">
+                {ARCHETYPES.find((a) => a.id === archetype)?.note}
+              </p>
+
+              {tightForArchetype.length > 0 && (
+                // Said before the call, not after. The generator reports the
+                // overflow either way, as a layout note that does not gate
+                // export, but a marketer should not spend a minute of model
+                // time to learn something the word budgets already knew.
+                <p className="mt-2 border-l-2 border-warn pl-2 text-xs text-muted">
+                  This block runs long, and {tightForArchetype.map((p) => p.label).join(", ")} will come
+                  back flagged as over-length. It belongs on the PDP listing image, which has the room.
+                </p>
+              )}
+
+              <div className="label mt-3">Prop direction</div>
               <input
-                className="field mt-2"
+                className="field mt-1"
                 placeholder="glass droplets, molecular motif..."
                 value={hint}
                 onChange={(e) => setHint(e.target.value)}
               />
               <p className="mt-2 text-xs text-muted">
-                Adds one generated prop graphic beside the real product, plus a benefit checklist and a
-                registry-backed stat badge where one exists, the elements observed on the brand&apos;s
-                own homepage banners. The product photo is given to the image model only as a reference
-                for scale and colour; it is told, repeatedly, never to redraw the product itself, and
-                the result is checked for exactly that before it is used.
+                Adds one generated prop graphic beside the real product. The product photo is given to
+                the image model only as a reference for scale and colour; it is told, repeatedly, never
+                to redraw the product itself, and the result is checked for exactly that before it is
+                used.
               </p>
             </>
           )}

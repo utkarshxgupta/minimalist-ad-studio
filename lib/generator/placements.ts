@@ -136,11 +136,3 @@ export function fieldsFor(p: Placement): CopyField[] {
   return (Object.keys(p.fields) as CopyField[]).filter((f) => (p.fields[f] ?? 0) > 0);
 }
 
-/** Words on the canvas. The footnote is fine print and is excluded by design. */
-export function canvasWordCount(parts: Partial<Record<CopyField, string>>): number {
-  return (["headline", "subhead", "body", "cta"] as CopyField[])
-    .map((f) => parts[f] ?? "")
-    .join(" ")
-    .split(/\s+/)
-    .filter(Boolean).length;
-}

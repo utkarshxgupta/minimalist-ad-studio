@@ -48,6 +48,20 @@ const INK = "#16130f";
 const MUTED = "#4a423a";
 /** Near-white, matching the brand's own canvas token observed on beminimalist.co. */
 const CANVAS = "#f6f5f2";
+/** One hairline weight for every rule drawn on the canvas. */
+const HAIRLINE = "rgba(22,19,15,0.18)";
+
+/**
+ * The audience grid's cells, in render order. The label text is ours. Every
+ * value is verbatim from the product page, filled in by `copy.ts` rather than
+ * written by the model, so this component only decides where each one sits.
+ */
+const AUDIENCE_FIELDS: { key: keyof AdCopy["audienceGrid"]; label: string }[] = [
+  { key: "concerns", label: "Concerns" },
+  { key: "skinType", label: "Suitable for" },
+  { key: "howToUse", label: "How to use" },
+  { key: "timing", label: "When" },
+];
 
 function px(box: Box, W: number, H: number) {
   return {
@@ -97,6 +111,19 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
   // decoding an actual export: the SPF pill wrapped "50" onto its own line
   // below the border in the PNG while the browser preview stayed on one line.
   const nowrap: React.CSSProperties = { whiteSpace: "nowrap" };
+
+  // Only the fields the page actually stated get a cell, so a product whose
+  // page states three of the four renders three cells rather than an empty
+  // box captioned with a label. An odd count is padded with one blank cell so
+  // the grid keeps all four of its edges.
+  const statedAudience = AUDIENCE_FIELDS.map((f) => ({
+    label: f.label,
+    value: copy.audienceGrid?.[f.key] ?? "",
+  })).filter((c) => c.value.trim().length > 0);
+  const audienceCells =
+    statedAudience.length > 1 && statedAudience.length % 2 === 1
+      ? [...statedAudience, { label: "", value: "" }]
+      : statedAudience;
 
   return (
     // The display scale lives on the middle box, never on the captured one:
@@ -234,6 +261,134 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
                   <div key={i} style={{ display: "flex", alignItems: "flex-start", gap: Math.round(8 * u) }}>
                     <span style={{ fontSize: Math.round(19 * u), lineHeight: 1.3, color: INK, ...nowrap }}>✓</span>
                     <span style={{ fontSize: Math.round(19 * u), lineHeight: 1.3, color: "#3b342c" }}>{item}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {copy.benefitBreakdown.length > 0 && (
+              // The mechanism-of-action block. The verb is set as a label and
+              // the mechanism as the sentence under it, which is the corpus
+              // pattern: "FIGHTS ACNE: provides potent anti-microbial activity
+              // against p-acne bacteria." Two weights, one line of hierarchy,
+              // no decoration.
+              <div
+                style={{
+                  marginTop: Math.round(18 * u),
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: Math.round(14 * u),
+                  maxWidth: "100%",
+                }}
+              >
+                {copy.benefitBreakdown.map((b, i) => (
+                  <div key={i}>
+                    <div
+                      style={{
+                        fontSize: Math.round(17 * u),
+                        fontWeight: 700,
+                        letterSpacing: "0.07em",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {b.verb}
+                    </div>
+                    <div
+                      style={{
+                        marginTop: Math.round(4 * u),
+                        fontSize: Math.round(18 * u),
+                        lineHeight: 1.4,
+                        color: "#3b342c",
+                      }}
+                    >
+                      {b.mechanism}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {copy.ingredientSynergy.length > 0 && (
+              // The ingredient-synergy block: which named ingredient does what.
+              // Every ingredient that reaches this render has already been
+              // checked against the product page's own per-ingredient tab by
+              // verifyIngredientSynergy, so the layout does not need to defend
+              // against a name the product does not contain.
+              <div
+                style={{
+                  marginTop: Math.round(18 * u),
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: Math.round(12 * u),
+                  maxWidth: "100%",
+                }}
+              >
+                {copy.ingredientSynergy.map((s, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      borderLeft: `2px solid ${HAIRLINE}`,
+                      paddingLeft: Math.round(14 * u),
+                      fontSize: Math.round(18 * u),
+                      lineHeight: 1.4,
+                    }}
+                  >
+                    <span style={{ fontWeight: 600 }}>{s.ingredient}</span>
+                    <span style={{ color: MUTED }}>: {s.role}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {audienceCells.length > 0 && (
+              // The audience-qualification block, as a bordered grid rather
+              // than prose. This content is a set of labelled key/value pairs
+              // on the product page itself, and flattening it into a sentence
+              // would be a rewrite of structured facts; a grid is the shape the
+              // data already has.
+              //
+              // Hairlines are drawn once each: the container owns the top and
+              // left edges, every cell owns its right and bottom. That is why
+              // an odd cell count is padded with a blank cell below, since a
+              // half-empty final row would leave the grid missing an edge.
+              <div
+                style={{
+                  marginTop: Math.round(18 * u),
+                  width: "100%",
+                  display: "grid",
+                  gridTemplateColumns: audienceCells.length === 1 ? "1fr" : "1fr 1fr",
+                  borderTop: `1px solid ${HAIRLINE}`,
+                  borderLeft: `1px solid ${HAIRLINE}`,
+                }}
+              >
+                {audienceCells.map((c, i) => (
+                  <div
+                    key={i}
+                    style={{
+                      padding: `${Math.round(12 * u)}px ${Math.round(14 * u)}px`,
+                      borderRight: `1px solid ${HAIRLINE}`,
+                      borderBottom: `1px solid ${HAIRLINE}`,
+                      minHeight: Math.round(64 * u),
+                    }}
+                  >
+                    {c.label && (
+                      <div
+                        style={{
+                          fontSize: Math.round(12 * u),
+                          letterSpacing: "0.16em",
+                          textTransform: "uppercase",
+                          color: MUTED,
+                          ...nowrap,
+                        }}
+                      >
+                        {c.label}
+                      </div>
+                    )}
+                    {c.value && (
+                      <div style={{ marginTop: Math.round(6 * u), fontSize: Math.round(17 * u), lineHeight: 1.3 }}>
+                        {c.value}
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>

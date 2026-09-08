@@ -8,10 +8,11 @@
  *   npm run generate -- <product-url>
  *   npm run generate -- <url> --placements meta_story_9x16,pdp_listing_11x16
  *   npm run generate -- <url> --angle "monsoon, oily skin" --mode creative
+ *   npm run generate -- <url> --mode creative --archetype synergy
  *   npm run generate -- <url> --mode creative --hint "glass droplets" --out prop.png
  */
 import { writeFileSync } from "node:fs";
-import { generateAd, adText, type Attempt } from "../lib/generator";
+import { generateAd, adText, ARCHETYPES, type Archetype, type Attempt } from "../lib/generator";
 import { PLACEMENTS, type PlacementId } from "../lib/generator/placements";
 
 try {
@@ -28,8 +29,9 @@ function flag(name: string): string | undefined {
 const url = process.argv[2];
 if (!url || url.startsWith("--")) {
   console.error("usage: npm run generate -- <product-url> [--placements a,b] [--angle ...]");
-  console.error("                          [--audience ...] [--mode photographic|creative] [--hint ...] [--out prop.png]");
+  console.error("                          [--audience ...] [--mode photographic|creative] [--archetype ...] [--hint ...]");
   console.error(`\nplacements: ${Object.keys(PLACEMENTS).join(", ")}`);
+  console.error(`archetypes: ${ARCHETYPES.map((a) => a.id).join(", ")}  (creative mode only)`);
   process.exit(1);
 }
 
@@ -47,7 +49,10 @@ function printAttempt(a: Attempt, chosen: boolean) {
   console.log(`\n    attempt ${a.index + 1}  ${VERDICT_MARK[a.score.verdict]}${chosen ? "  <- shown" : ""}`);
   for (const line of adText(a.copy).split("\n")) console.log(`      | ${line}`);
   if (a.copy.checklist.length) console.log(`      checklist: ${a.copy.checklist.join(" | ")}`);
-  if (a.copy.statBadge?.value) console.log(`      badge: ${a.copy.statBadge.value} — ${a.copy.statBadge.label}`);
+  if (a.copy.statBadge?.value) console.log(`      badge: ${a.copy.statBadge.value} (${a.copy.statBadge.label})`);
+  for (const b of a.copy.benefitBreakdown) console.log(`      mechanism: ${b.verb}: ${b.mechanism}`);
+  for (const s of a.copy.ingredientSynergy) console.log(`      synergy: ${s.ingredient}: ${s.role}`);
+  for (const [k, v] of Object.entries(a.copy.audienceGrid ?? {})) console.log(`      audience ${k}: ${v}`);
 
   for (const f of a.score.findings) {
     const where = f.target === "image" ? "image" : `"${f.span}"`;
@@ -61,15 +66,23 @@ function printAttempt(a: Attempt, chosen: boolean) {
 async function main() {
   const mode = flag("mode") === "creative" ? "creative" : "photographic";
 
+  const archetype = flag("archetype") ?? "statement";
+  if (!ARCHETYPES.some((a) => a.id === archetype)) {
+    console.error(`Unknown archetype "${archetype}". Known: ${ARCHETYPES.map((a) => a.id).join(", ")}`);
+    process.exit(1);
+  }
+
   const run = await generateAd(url, {
     angle: flag("angle"),
     audience: flag("audience"),
     placements: requested.length ? (requested as PlacementId[]) : undefined,
     mode,
+    archetype: archetype as Archetype,
     propHint: flag("hint"),
   });
 
-  console.log(`\n${run.facts.name}  [mode: ${run.mode}]`);
+  const modeLabel = run.mode === "creative" ? `creative/${run.archetype}` : run.mode;
+  console.log(`\n${run.facts.name}  [mode: ${modeLabel}]`);
   console.log(`  facts: ${run.factsSource}${run.factsSource === "snapshot" ? ` (captured ${run.fetchedAt})` : ""}`);
   if (run.fallbackReason) console.log(`  fell back because: ${run.fallbackReason}`);
   for (const w of run.factWarnings) console.log(`  fact warning: ${w}`);

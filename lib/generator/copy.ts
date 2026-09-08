@@ -1,8 +1,9 @@
 import { GoogleGenAI } from "@google/genai";
 import { AdCopy, type ClaimTrace, type ProductFacts } from "@/lib/types";
 import { registryDigestFor } from "@/lib/standard/loader";
-import { buildCopyPrompt, factsBlock, COPY_SCHEMA, type Brief, type Mode } from "./prompt";
-import { canvasWordCount, fieldsFor, type CopyField, type Placement } from "./placements";
+import { buildCopyPrompt, factsBlock, COPY_SCHEMA, type Archetype, type Brief, type Mode } from "./prompt";
+import { adText, canvasWordCount } from "./ad-text";
+import { fieldsFor, type CopyField, type Placement } from "./placements";
 
 /**
  * Stage 3: write the copy.
@@ -31,14 +32,15 @@ export async function generateCopy(
   placement: Placement,
   brief: Brief = {},
   avoid: string[] = [],
-  mode: Mode = "photographic"
+  mode: Mode = "photographic",
+  archetype: Archetype = "statement"
 ): Promise<CopyResult> {
   if (!process.env.GEMINI_API_KEY) {
     throw new CopyError("GEMINI_API_KEY is not set, so no copy can be generated.");
   }
 
   const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
-  const prompt = buildCopyPrompt(facts, placement, brief, avoid, mode);
+  const prompt = buildCopyPrompt(facts, placement, brief, avoid, mode, archetype);
 
   let lastError = "";
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -59,14 +61,18 @@ export async function generateCopy(
         continue;
       }
 
-      // A field this placement or this mode does not use is blanked rather
-      // than trusted to be empty. The model is told to leave it alone; the
-      // artboard should not depend on it having listened.
-      const copy = clearUnusedFields(parsed.data, placement, mode);
+      // A field this placement, mode, or archetype does not use is blanked
+      // rather than trusted to be empty. The model is told to leave it
+      // alone; the artboard should not depend on it having listened.
+      const copy = clearUnusedFields(parsed.data, facts, placement, mode, archetype);
 
       return {
         copy,
-        ungrounded: [...verifyClaimTrace(facts, copy), ...verifyStatBadge(facts, copy)],
+        ungrounded: [
+          ...verifyClaimTrace(facts, copy),
+          ...verifyStatBadge(facts, copy),
+          ...verifyIngredientSynergy(facts, copy),
+        ],
         overLength: overLengthFields(copy, placement),
         model: COPY_MODEL,
       };
@@ -83,63 +89,74 @@ export async function generateCopy(
 
 const ALL_FIELDS: CopyField[] = ["headline", "subhead", "body", "cta", "footnote"];
 
-function clearUnusedFields(copy: AdCopy, placement: Placement, mode: Mode): AdCopy {
+/**
+ * Exported for the gate tests. The archetype isolation this performs is a
+ * real control, not a tidying step: it is what makes "the model was told to
+ * leave the other blocks empty" true whether or not the model listened.
+ */
+export function clearUnusedFields(
+  copy: AdCopy,
+  facts: ProductFacts,
+  placement: Placement,
+  mode: Mode,
+  archetype: Archetype
+): AdCopy {
   const used = new Set(fieldsFor(placement));
   const out = { ...copy };
   for (const f of ALL_FIELDS) if (!used.has(f)) out[f] = "";
   if (!placement.hasCaption) out.caption = "";
 
-  // Photographic mode gets no checklist and no stat badge regardless of what
-  // the model returned. The prompt already says so; this is the check, not
-  // the instruction.
+  // Photographic mode gets none of the creative-mode elements regardless of
+  // what the model returned. The prompt already says so; this is the check,
+  // not the instruction.
   if (mode !== "creative") {
     out.checklist = [];
     out.statBadge = {};
+    out.benefitBreakdown = [];
+    out.ingredientSynergy = [];
+    out.audienceGrid = {};
+    return out;
   }
+
+  // Within creative mode, only the active archetype's own fields survive.
+  // Each archetype's prompt already tells the model to leave the others
+  // empty; this is what makes that true regardless of whether it listened.
+  if (archetype !== "statement") {
+    out.checklist = [];
+    out.statBadge = {};
+  }
+  if (archetype !== "mechanism") out.benefitBreakdown = [];
+  if (archetype !== "synergy") out.ingredientSynergy = [];
+
+  // The audience grid is never model-authored. It is a direct, verbatim
+  // mapping from ProductFacts.audience, filled in here regardless of what the
+  // model wrote, because that data is already structured and exact and
+  // asking a model to transcribe it only adds a chance of it not doing so
+  // exactly. Every other archetype leaves it empty.
+  out.audienceGrid = archetype === "audience" ? audienceGridFrom(facts) : {};
+
   return out;
 }
 
-/**
- * The text the scorer sees, and the text a claim trace entry is checked
- * against for presence.
- *
- * The caption is included deliberately. On a Meta placement the caption is
- * where the actual argument gets made, so scoring only the canvas would check
- * the six words nobody reads closely and ignore the paragraph making the
- * claim. The checklist and stat badge are included for the same reason: they
- * are rendered on the creative, so a claim living only in a checklist bullet
- * has to be checkable exactly like a claim in the body copy.
- */
-export function adText(copy: AdCopy): string {
-  return [
-    copy.headline,
-    copy.subhead,
-    copy.body,
-    copy.cta,
-    copy.footnote,
-    copy.caption,
-    ...copy.checklist,
-    copy.statBadge?.value ?? "",
-    copy.statBadge?.label ?? "",
-  ]
-    .filter(Boolean)
-    .join("\n");
+/** Direct, verbatim mapping. Not model output: see the note on `audienceGrid` above. */
+function audienceGridFrom(facts: ProductFacts): AdCopy["audienceGrid"] {
+  const a = facts.audience;
+  if (!a) return {};
+  return {
+    concerns: a.concerns,
+    skinType: a.ageSuitability,
+    howToUse: a.howToUse,
+    timing: a.timing,
+  };
 }
 
-/** Just what is rendered on the image. Used for the canvas word budget. */
-export function canvasText(copy: AdCopy): string {
-  return [
-    copy.headline,
-    copy.subhead,
-    copy.body,
-    copy.cta,
-    ...copy.checklist,
-    copy.statBadge?.value ?? "",
-    copy.statBadge?.label ?? "",
-  ]
-    .filter(Boolean)
-    .join("\n");
-}
+/**
+ * `adText`, `canvasText` and `canvasWordCount` live in `./ad-text`, which
+ * imports only types, so the review surface can call the same functions rather
+ * than keeping its own idea of what the ad says. Re-exported here because this
+ * is where the copy is produced and where every existing caller imports them.
+ */
+export { adText, canvasText, canvasWordCount } from "./ad-text";
 
 function normalise(s: string): string {
   return s.toLowerCase().replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/\s+/g, " ").trim();
@@ -210,6 +227,23 @@ export function verifyStatBadge(facts: ProductFacts, copy: AdCopy): ClaimTrace[]
   return grounded ? [] : [{ claim: `stat badge: ${claim}`, supportedBy: "" }];
 }
 
+/**
+ * An ingredient synergy entry names an ingredient and asserts what it does.
+ * The claim trace can catch an ungrounded role phrase, but it cannot catch a
+ * named ingredient the product does not even contain, because the ingredient
+ * name itself is often a single word that can coincidentally appear
+ * somewhere in the facts block without being one of this product's actives.
+ * So the ingredient name is checked directly against
+ * `ProductFacts.ingredientNotes`, which is exactly the list of ingredients
+ * this product's own page describes.
+ */
+export function verifyIngredientSynergy(facts: ProductFacts, copy: AdCopy): ClaimTrace[] {
+  const known = new Set(facts.ingredientNotes.map((n) => normalise(n.ingredient)));
+  return copy.ingredientSynergy
+    .filter((s) => !known.has(normalise(s.ingredient)))
+    .map((s) => ({ claim: `ingredient synergy: ${s.ingredient}`, supportedBy: "" }));
+}
+
 function overLengthFields(copy: AdCopy, placement: Placement): string[] {
   const out: string[] = [];
 
@@ -219,12 +253,9 @@ function overLengthFields(copy: AdCopy, placement: Placement): string[] {
     if (len > budget) out.push(`${f} is ${len} characters, budget is ${budget}`);
   }
 
-  const words = canvasWordCount({
-    headline: copy.headline,
-    subhead: copy.subhead,
-    body: copy.body,
-    cta: copy.cta,
-  });
+  // The whole copy, not a hand-listed subset of it. A creative-mode block is
+  // printed on the canvas exactly like the headline is, so it counts.
+  const words = canvasWordCount(copy);
   if (words > placement.canvasWordLimit) {
     out.push(
       `canvas carries ${words} words, and ${placement.label} wants under ${placement.canvasWordLimit}` +

@@ -21,6 +21,7 @@ const Body = z.object({
     .array(z.enum(["meta_feed_4x5", "meta_square_1x1", "meta_story_9x16", "pdp_listing_11x16"]))
     .optional(),
   mode: z.enum(["photographic", "creative"]).optional(),
+  archetype: z.enum(["statement", "mechanism", "synergy", "audience"]).optional(),
   propHint: z.string().optional(),
 });
 
