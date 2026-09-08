@@ -169,13 +169,27 @@ fixtures/          committed product snapshots and parser fixtures
 
 ## The written record
 
-[`docs/DECISIONS.md`](docs/DECISIONS.md) is the one-page argument: what was
-decided, what was rejected, and what the evidence is worth.
-[`docs/FAILURE-MODES.md`](docs/FAILURE-MODES.md) is where this system is weak,
-stated plainly.
+The two deliverable documents:
 
-Commits are the working record and are not squashed.
-[`docs/CORRECTIONS.md`](docs/CORRECTIONS.md) logs where this agent was wrong and
-how it was caught, including two regulatory citations that were confidently
-wrong before verification. A tool that judges other people's claims should be
-able to show its own error rate.
+- [`docs/DECISIONS.md`](docs/DECISIONS.md) is the one-pager: the brand rules and
+  how they were derived, what was cut and why, and the decision with the least
+  confidence behind it.
+- [`docs/FAILURE-MODES.md`](docs/FAILURE-MODES.md) is the three ways this costs
+  money in production, with mitigations and whether each lands before or after
+  launch.
+
+Behind them, kept because the reasoning is the part worth reading:
+
+- [`docs/DECISION-LOG.md`](docs/DECISION-LOG.md), every decision in long form
+  with the alternatives rejected.
+- [`docs/KNOWN-LIMITATIONS.md`](docs/KNOWN-LIMITATIONS.md), the fuller register
+  of everything else known to be weak.
+- [`docs/CORRECTIONS.md`](docs/CORRECTIONS.md), where this agent was wrong and
+  how it was caught: two regulatory citations confidently wrong before
+  verification, a study filed against the wrong product, a scrim that faded
+  across the text it existed to protect. A tool that judges other people's
+  claims should be able to show its own error rate.
+
+Commits are the working record and are not squashed. The raw agent session
+transcripts run to 64MB of mostly base64 image data, so they are submitted
+alongside this repo rather than carried in every clone of it.

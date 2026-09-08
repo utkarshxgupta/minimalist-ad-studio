@@ -1,0 +1,419 @@
+# Decision log
+
+The long-form record: every decision that mattered, with the alternatives
+rejected and why. The one-page deliverable is `docs/DECISIONS.md`; this is what
+sits behind it, kept because the reasoning is the part worth reading.
+
+---
+
+## The problem, restated
+
+The brief describes the bottleneck as reviewers disagreeing with each other while
+rejected ads bounce back and forth for days. That is worth reading twice, because
+it does not describe a speed problem. Reviewers disagreeing is not slowness; it is
+**the absence of a written standard**. An unwritten standard cannot be applied
+consistently, cannot be appealed against, and cannot be improved, because there is
+nothing to amend.
+
+If that reading is right, then the fastest possible ad generator does not fix
+this. Two marketers with a faster tool and no agreed standard argue at higher
+throughput.
+
+So the intervention is to write the standard down and version it, and to build
+both surfaces as consumers of that one artefact. `standard/` is the product.
+`app/` is where it gets applied.
+
+## What was built
+
+Two surfaces over one rulebook.
+
+**Generate.** A product URL in, scored creatives out across four placements in
+two channels. The page is fetched server-side, parsed into `ProductFacts`, copy
+is generated against those facts and nothing else, and each creative self-scores
+before it renders. The default path calls no image model: the real photo is
+composited onto a flat brand canvas. An opt-in creative mode adds a benefit
+checklist, a registry-backed stat badge, and one generated prop graphic, checked
+for containing anything resembling the product's own container before it is used.
+
+**Review.** Paste any ad. Every finding cites a rule ID, quotes the exact words
+it objects to, says why, and says what to do instead.
+
+**The standard.** 18 rules at v1.1.0: 12 policy, 4 tone, 2 language; 9 BLOCK and
+9 WARN. Provenance is labelled per rule: 9 from regulation, 7 observed in the
+brand's own corpus, 2 our inference. 10 citations are primary text, 1 is
+secondary and flagged as such. Derived from 179 recorded corpus observations.
+
+---
+
+## The decisions that mattered
+
+### Every finding cites a rule ID
+
+No finding may be produced by a model opinion that is not anchored to a written
+rule. A finding citing a rule that does not exist is discarded in code.
+
+*Rejected:* free-form model critique. It produces plausible, unfalsifiable
+objections, which is precisely the Slack argument the tool is meant to end, now
+with a machine's authority behind it.
+
+### Severity is what the agent does alone, refuses, and escalates
+
+| | |
+|---|---|
+| `PASS` | Acts alone. Exports freely. |
+| `WARN` | Acts, with a logged reason. Brand tone and language. |
+| `BLOCK` | Refuses and escalates. No finished creative is rendered. |
+
+The line is drawn at legal and claims exposure, because the expensive failure in
+marketing AI is publishing something wrong, not writing something bland. Tone is
+a matter of taste and gets an override. Substantiation is not.
+
+### A BLOCK is never auto-rewritten
+
+If copy says "cures acne" and a rewrite loop turns it into "helps clear acne",
+compliance did not improve. We found phrasing the detector misses, which is
+Goodharting our own scorer. A BLOCK means the claim is unsupported, so the
+correct action is to drop the claim, and dropping a claim is a decision a person
+makes. WARN findings loop, capped at two retries, and the retry is told what was
+wrong rather than shown the rejected sentence.
+
+*Rejected:* the obvious demo, where the agent fixes its own violations and shows
+a green tick. It demos better and is worse.
+
+### Placements are formats, not sizes
+
+A Meta feed ad is scrolled past and keeps under 15 words on the canvas, moving
+the argument into the caption. An 11:16 PDP listing image is studied by a buyer
+already zoomed in and runs 40 to 90 words. Copy is written and scored per
+placement, never rescaled from one master.
+
+This is a compliance decision wearing design clothes, and it points against
+intuition. Substantiation costs words: "93% subjects saw significant reduction in
+active acne in 4 weeks" is eleven of the fifteen a feed ad gets. The short
+formats are therefore where evidence gets squeezed out, which makes them the most
+dangerous placements the brand owns, not the most trivial.
+
+*Rejected:* one creative rendered at four aspect ratios. It is the cheaper build
+and it silently truncates the evidence exactly where evidence is scarcest.
+
+### The disclaimer is part of the standard, and has to be legible
+
+A quantified claim must carry its substantiation footnote on the creative, and
+the footnote must sit with the claim it disclaims: on the canvas if the stat is
+on the canvas, at the end of the caption if the stat is in the caption. A
+disclaimer printed on an image whose claim lives in the caption satisfies nobody.
+
+The wording lives in `standard/disclosures.yaml` marked `secondary` and
+`verified: false`, because it appears on none of the scraped product pages and
+comes from an external audit this repo cannot verify. The requirement is sound
+regardless of the wording; a disclosure that misstates who ran the study is its
+own problem, so it is not quietly hardcoded.
+
+### A BLOCK does not get a finished-looking creative
+
+The interface shows the copy as text with the flagged spans marked, and no
+artboard. A composed creative carrying a warning is halfway to published:
+somebody screenshots it, somebody else asks why not, and the argument restarts.
+
+### Two layers, and each finding says which one it came from
+
+Layer 1 is lexicon and pattern matching, and reruns identically forever. Layer 2
+is Gemini Flash with the rulebook in context, one call per dimension in parallel.
+6 rules run in layer 1, 16 in layer 2, and 4 in both, where layer 1 wins on
+overlap because it is reproducible. Separate calls per dimension because a single
+prompt doing three jobs bleeds: tone concerns contaminate legal judgments, and
+you cannot tune one dimension without disturbing the others.
+
+### Extraction uses no model at all
+
+`ProductFacts` is the ground truth every generated claim is checked against. If a
+model extracted the facts, a hallucinated fact would become a *licensed* claim:
+the grounding check would look it up, find the invented entry, and certify the
+ad. The check would still pass. It would just be checking against fiction. When
+the parser cannot find a field it says so and leaves it empty.
+
+### Claim grounding is enforced twice
+
+The generator emits a claim trace, verified in code: the supporting text must
+appear verbatim in the facts and the claim must appear verbatim in the ad. A
+model escapes that by simply not declaring a claim, so the scorer then runs over
+the finished copy with the same facts attached and does not care what the
+generator declared. The trace catches the confident mistake. The scorer catches
+the convenient omission.
+
+### The product photograph is never generated
+
+The pack, the label and the printed concentration are photographic. A generated
+label is a fabricated fact about a real product, which is the same offence as a
+fabricated claim and harder to spot. The default path composites the real photo
+onto a flat brand canvas and calls no image model at all; the opt-in creative
+mode adds one small generated prop graphic beside the product, never behind or
+in place of it, and the prop is checked for containing anything resembling the
+product's own container before it is used.
+
+*Revised.* The first version of this decision generated a full photoreal
+backdrop and composited the product over it with a feathered edge. Two
+independently generated photographs do not share a light source or a colour
+temperature, and the mismatch read as a visible seam no amount of feathering
+hid. A flat canvas cannot produce that seam, so the fix removed the second
+photograph rather than trying to blend it better.
+
+### Layout is data, and it is tested
+
+Every box position, the product's, the copy column's, the creative-mode prop's,
+lives in one module the renderer and the tests both import, rather than as
+inline styles nobody could assert against. Checked for: the product never
+touching the canvas edge, a Story clearing Instagram's own UI safe zones, and
+the prop never overlapping the product.
+
+This exists because two real defects shipped past every test that existed
+before it. `object-fit: cover` forcing a portrait bottle into a landscape box
+cropped the cap off; a prop sized and centred on the product's own box landed
+directly behind the opaque photo on the placement where the product fills 82
+percent of the frame, and rendered as nothing. Both were caught by looking at
+the actual output on a direct report that it did not look publication-ready,
+not by anything in this codebase noticing on its own. The gate had a
+verification discipline for claims and had never applied the same discipline
+to whether the resulting image was legible.
+
+*Rejected:* leaving layout as inline JSX styles and relying on visual review
+before each release. Visual review is exactly what missed both bugs the first
+time; a rectangle-overlap assertion does not get tired of looking.
+
+### Creative mode adds what the brand's own banners actually contain
+
+The instruction was to feed the product photo to an image model and push past
+a plain product-and-text format, pointing at the brand's homepage banners.
+Read literally that sounds like painted scenes; the banners themselves are not
+that. Every one is the same template — kicker, headline, divider, a benefit
+checklist, a CTA — beside real product photography with a *small* prop, a
+molecule motif, a scatter of glass droplets, on a near-flat canvas. So creative
+mode adds a checklist, a registry-backed stat badge, and one generated prop,
+never a generated environment.
+
+The product photo does go to the image model, as asked, as a reference for
+scale and colour, with the prompt repeatedly forbidding it from drawing the
+product itself, and that instruction is checked rather than trusted: the model
+is asked directly whether its own output resembles a bottle, tube, jar or
+dropper, and the prop is discarded if so.
+
+*Rejected, deliberately:* a generated testimonial card, despite the reference
+banners having one. Inventing a reviewer's name and words is a fabricated
+testimonial regardless of how the copy reads, which is precisely what
+`POLICY-009` and `POLICY-010` exist to catch. The component is there for a
+marketer to fill in with a real quote; the generator does not write one.
+
+### Fail closed
+
+If the policy check fails after a retry, the verdict is forced to BLOCK. An
+unrun compliance check must never read as a pass. This is surfaced with its
+cause, because safe behaviour that hides why it happened is hard to tell from
+broken behaviour, and that cost an hour once already.
+
+### Creative-mode archetypes: four content blocks, one template
+
+Every banner on beminimalist.co is the same template with a different block in
+the middle: wordmark, headline, one content block, CTA, product photograph.
+That observation is the whole design. An archetype selects which block gets
+written, not a different canvas, so all four render through one `Artboard` and
+are covered by one set of layout tests. Four separate templates would be four
+things to keep compliant, and compliance is the expensive part.
+
+The four are a benefit checklist with a registry-backed stat badge, a mechanism
+of action (bold verb plus how it works), an ingredient synergy (what each named
+ingredient does), and an audience qualification grid.
+
+Two of them are worth defending individually.
+
+**Ingredient synergy gets its own grounding check**, separate from the claim
+trace. The trace can catch an ungrounded role phrase, but an ingredient name is
+often a single word that appears somewhere in a page of prose without being an
+ingredient of this product, so a synergy naming Retinol in a salicylic acid
+serum would pass a substring check and be false. The name is therefore verified
+against `ProductFacts.ingredientNotes`, which is exactly the list of
+ingredients the product's own page describes.
+
+**The audience grid is not written by the model at all.** Those values are
+already structured and verbatim on the product page under its own labels, so
+`copy.ts` transcribes them directly and discards whatever the model returned
+for that field. Asking a model to copy structured facts adds nothing and
+subtracts a guarantee. It will usually do it correctly, and "usually" is not a
+control.
+
+The archetype the marketer picks is enforced in code, not requested in the
+prompt. Every block the chosen archetype does not own is blanked after parsing,
+so a stray block cannot reach a finished creative on the strength of the model
+having been asked nicely.
+
+One archetype does not fit every placement, and the tool says so before the
+call rather than after it. The audience grid is verbatim page text and runs
+past fifty words, which no Meta canvas budget accommodates; the generator would
+report that afterwards as a layout note, correctly, but a note that fires on
+every single run is a note people learn to scroll past.
+
+### Creative mode generates the whole frame, and pays for it at the gate
+
+The ask was direct: give the product photograph to an image model and let it
+make the ad. That collides with invariant 5, which says the product image is
+never generated, and the collision is real rather than a technicality. The pack
+in a creative-mode frame is model output. A model that redraws a label can
+change what it says.
+
+The resolution is not to pretend the invariant is intact. It is to make the
+exception explicit and charge for it:
+
+- A creative-mode ad **can never export freely.** It always requires a logged
+  human override, whatever the copy scores, because there is no text check for
+  a fact that exists only in pixels.
+- Typography is never left to the image model. The frame is generated with
+  deliberate negative space, derived from the same layout the artboard uses,
+  and every word is typeset in CSS over it. So every word on the finished ad is
+  still copy the scorer read and the claim trace verified.
+- Photographic mode stays the default, and it is the honest one: nothing in
+  that frame is generated at all.
+
+The label check is the interesting part. Asking the vision model "does any pack
+text look invented" was the obvious control and it failed on the first frame,
+which rendered "acetyi glucosamine" onto a real product and was passed clean.
+So the model is asked to transcribe rather than judge, and the judgment is made
+deterministically: a word on the pack that is not in the product page's own
+vocabulary but is one edit away from a word that is, is a corruption of it.
+Frames that fail are regenerated, capped at three.
+
+Measured, not asserted: two products, one passes on the first frame, one fails
+three times. The failure rate tracks how much small type a pack carries, and no
+prompt fixes that. Which is the argument for the override, not against the
+mode.
+
+### The type is the brand's, or it says whose it is
+
+beminimalist.co sets its entire site in ProximaNovaRegular and ProximaNovaBold,
+read off the live stylesheet. Proxima Nova is licensed and cannot ship in this
+repo, so the artboard's font stack names it first and falls back to Figtree.
+A machine with the licence installed renders and exports the real face with no
+code change, because html-to-image captures through the browser's own stack.
+
+Recorded rather than silently substituted. A creative set in a stand-in face is
+a creative a brand designer rejects on sight, and they should be able to tell
+which one they are looking at.
+
+### The call to action is a platform field, not artwork
+
+Meta draws its own CTA button under the ad, in the link strip beside the domain
+and headline, from a fixed list the advertiser picks in Ads Manager. It is ad
+metadata, a sibling of the caption, and it is not part of the creative.
+
+So `Placement.ctaSurface` says where the call to action lives, and today no
+placement puts one on the canvas: Meta placements declare `platform`, and the
+PDP listing declares `none`, because that reader is already on the product page
+a few hundred pixels from the real buy button.
+
+The value is picked from Meta's own list rather than written, since free text
+here is something nobody can select in the platform. It is still scored: a CTA
+is copy, and "Order Now" under a claim the ad cannot support is still that ad
+making that claim. It just does not spend the canvas word budget, because it is
+not ink on the canvas.
+
+There is deliberately no `canvas` value yet. The brand does put a CTA inside its
+own website banners, and a web banner is itself the click target, but this tool
+does not generate that placement.
+
+### Deliberately not built
+
+RAG over the rulebook (it fits in context; retrieval adds a failure mode and
+removes determinism), agent frameworks (they hide the judgment this project
+exists to make visible), multi-agent debate per ad (slower, costlier, and it
+makes the standard unauditable), LLM-as-judge for evaluating the scorer (we have
+human labels, and labels beat a judge), fine-tuning, vector DB, auth. The
+remaining six creative archetypes in the observed corpus, which are variations
+on the four built rather than new grounding problems.
+
+---
+
+## Where the brief looks wrong
+
+The brief refers claims to "India's Drugs and Cosmetics rules and the ASCI code".
+Cosmetics are governed by the Cosmetics Rules 2020 under that Act, but the
+sharper constraint on ad copy is **Cosmetics Rules 2020 Rule 36** plus the
+**CCPA Guidelines 2022**, with the Drugs and Magic Remedies Act biting narrowly
+and specifically rather than generally.
+
+That distinction was not free. An early rule grounded a prohibition on "cures
+acne" in the D&MR Act Schedule. The Schedule lists 54 conditions and acne,
+pigmentation, wrinkles and dandruff are not among them. The real mechanism is not
+that "cure" is a banned word; it is that a therapeutic claim reclassifies the
+product out of the cosmetic category and into drug licensing. The D&MR Act does
+apply, but precisely: a brightening product straying into claiming to treat
+**leucoderma** engages s.3(d) directly, which for a brand selling Alpha Arbutin
+is a real and named exposure. Full account in `docs/CORRECTIONS.md` C-002.
+
+---
+
+## Evidence, and what it is worth
+
+**Eval.** 29 labelled ads: 13 seeded violations, 9 hard negatives, 4 real
+competitor ads, 3 real Minimalist ads. Current result is 29/29 exact verdict
+match with **0 false positives**.
+
+That number is a fit, not a generalisation result, and should be read that way.
+The rulebook was iterated against these cases. The headline metric here is false
+positives rather than recall, because a scorer that blocks everything is
+abandoned in week two, and abandonment is the failure mode that actually costs
+money.
+
+**Red team.** A white-box adversary that sees the rulebook, at temperature 1.1,
+because a red team at temperature 0 writes the same attacks every run. Latest
+round: 24 attacks, 17 blocked, 6 downgraded to WARN by design, 1 escaped. The
+escape was a ranking claim written as spaced-out characters; the response was to
+move generalisation into model guidance rather than chase spacing permutations in
+a regex, and to add the attack to the eval set as a regression row.
+
+The attacker and the scorer are the same model family, so their blind spots
+correlate. **This measures gameability, not safety.**
+
+**Corrections.** Eight logged in `docs/CORRECTIONS.md`, including two regulatory
+citations that were confidently wrong before verification, a substantiation claim
+filed against the wrong product, and two compositing defects reported by the user
+after this session's own review had called the same code correct: a product photo
+cropped out of frame, a generated backdrop that produced a visible seam, and a
+badge that wrapped in the export but not the preview. A follow-up fix for the
+first repeated the pattern at smaller scale, self-caught this time: a prop graphic
+placed behind the opaque product photo, invisible, verified only by re-looking at
+the actual render rather than trusting the previous fix's own test suite. A tool that judges other people's
+claims should be able to show its own error rate.
+
+Twelve known weaknesses are written down in `docs/FAILURE-MODES.md`. The one
+worth reading first: `ProductFacts` is the brand's own page copy, so where the
+page overclaims, grounded generation reproduces the overclaim. A PASS means
+"consistent with the product page", not "certainly lawful".
+
+---
+
+## What I would do next, in order
+
+1. **Extend the geometry checks from layout to legibility.** The tests added
+   this session assert non-overlapping rectangles; they do not assert that text
+   fits its box, that contrast holds against whatever sits behind it, or that a
+   font actually loaded before an export was taken. Two real defects shipped
+   because nothing checked geometry at all; the geometry checks that exist now
+   are a first pass, not a complete one.
+2. **Build the creative archetypes.** An external audit of the brand's asset
+   library identified ten recurring creative structures. This repo has three
+   layout families plus creative mode's checklist and stat badge. That is
+   still the largest single gap between what it produces and what the brand
+   actually ships.
+3. **Get 50 real ads from the brand's archive.** The tone and language rules were
+   derived from product pages because ad copy could not be obtained. Those are
+   different registers, and a rulebook built on the wrong one is systematically
+   lenient about the exact failure it exists to catch.
+4. **Close the grounding gap in the standard.** Invariant 4 is enforced by rule
+   only for concentrations. A benefit claim absent from `ProductFacts` is
+   currently a generation warning, not a finding. That rule should exist, and
+   adding it needs the eval run either side.
+5. **Give the registry an owner.** `standard/claims-registry.yaml` is populated
+   from what product pages state, not from study reports. Until whoever holds the
+   studies owns it, POLICY-012 will produce false positives on real claims.
+6. **Image input on the review surface.** Real ads are pictures, and the tool
+   currently reads text.
+7. **An independent red team.** A different model family, so the blind spots stop
+   correlating.

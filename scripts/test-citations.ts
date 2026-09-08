@@ -30,7 +30,9 @@ const SOURCES = [
   "standard/regulatory-sources.md",
   "docs/CORRECTIONS.md",
   "docs/FAILURE-MODES.md",
+  "docs/KNOWN-LIMITATIONS.md",
   "docs/DECISIONS.md",
+  "docs/DECISION-LOG.md",
   "docs/DESIGN.md",
   "docs/RULE-PROPOSALS.md",
 ];
