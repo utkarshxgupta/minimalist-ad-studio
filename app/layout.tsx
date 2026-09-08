@@ -49,11 +49,20 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
               <Link href="/review" className="hover:underline underline-offset-4">
                 Review
               </Link>
+              <Link href="/standard" className="hover:underline underline-offset-4">
+                Standard
+              </Link>
             </nav>
-            <span className="ml-auto font-mono text-xs text-muted">
+            {/*
+              This used to be a plain span: a stat with nowhere to go. Someone
+              asked what the point of printing it was if the rules it counts
+              are nowhere on the web, and there was no answer, so it is a link
+              to the page that lists them now.
+            */}
+            <Link href="/standard" className="ml-auto font-mono text-xs text-muted hover:underline underline-offset-4">
               rulebook {book.version} · {book.active.length} rules
               {book.unverified.length > 0 ? ` · ${book.unverified.length} inert` : ""}
-            </span>
+            </Link>
           </div>
         </header>
         <main className="flex-1">{children}</main>

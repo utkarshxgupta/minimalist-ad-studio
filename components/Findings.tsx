@@ -1,3 +1,4 @@
+import Link from "next/link";
 import type { Finding } from "@/lib/types";
 import { VerdictBadge } from "./Verdict";
 
@@ -26,9 +27,14 @@ export function FindingList({ findings }: { findings: Finding[] }) {
         <li key={`${f.ruleId}-${i}`} className="border border-line bg-card p-3">
           <div className="flex flex-wrap items-center gap-2">
             <VerdictBadge verdict={f.severity} size="sm" />
-            <span className="font-mono text-xs font-medium" title="Defined in standard/claims.rules.yaml">
+            <Link
+              href={`/standard#${f.ruleId}`}
+              target="_blank"
+              className="font-mono text-xs font-medium underline decoration-dotted underline-offset-2 hover:decoration-solid"
+              title="Open this rule in the standard"
+            >
               {f.ruleId}
-            </span>
+            </Link>
             <span className="font-mono text-[10px] text-muted">
               {f.layer === "deterministic" ? "layer 1 · lexicon" : "layer 2 · judgment"}
               {f.target === "image" ? " · image" : ""}

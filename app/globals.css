@@ -63,3 +63,14 @@ body {
   outline: 2px solid var(--ink);
   outline-offset: -1px;
 }
+
+/*
+ * A finding links to its rule as `/standard#POLICY-003`. This is what makes
+ * the card that landed on actually stand out from the other seventeen, with
+ * no client-side JavaScript: the standard page is a server component, and
+ * `:target` is the platform's own answer to "which one did I just arrive at."
+ */
+:target {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
