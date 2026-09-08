@@ -90,6 +90,8 @@ export function extractFacts(bundle: PageBundle): ExtractionResult {
   }
 
   const trustBadges = extractTrustBadges($);
+  const ingredientNotes = extractIngredientNotes(sections);
+  const audience = extractAudience(sections);
 
   return {
     facts: {
@@ -98,11 +100,98 @@ export function extractFacts(bundle: PageBundle): ExtractionResult {
       actives,
       statedBenefits,
       trustBadges,
+      ingredientNotes,
+      audience,
       heroImageUrl,
       rawText: buildRawText(name, subtitle, sections),
     },
     warnings,
   };
+}
+
+/**
+ * The per-ingredient tabs' own descriptive sentence: "A form of vitamin B3,
+ * Niacinamide is a superstar ingredient that repairs skin, reduces occurrence
+ * of acne, and fades blemishes." `extractActives` already reads these tabs to
+ * pull a concentration number out and discards the sentence around it. This
+ * reads the same tabs for the sentence instead, which is what an ingredient
+ * synergy archetype needs and what the concentration regex was never built to
+ * keep.
+ */
+export function extractIngredientNotes(sections: Section[]): ProductFacts["ingredientNotes"] {
+  const out: { ingredient: string; note: string }[] = [];
+  for (const s of sections) {
+    if (isContentSection(s.title) || !s.text) continue;
+    // A real ingredient tab title is short and carries no punctuation; this
+    // excludes stray tabs (shipping, FAQ) that isContentSection's fixed list
+    // does not name but that also are not ingredients.
+    if (s.title.length > 40 || /[.!?]/.test(s.title)) continue;
+    out.push({ ingredient: s.title, note: s.text });
+  }
+  return out;
+}
+
+/**
+ * Labels as they appear in "Ideal For" and "How to Use", in the order this
+ * function needs to scan them: each entry's value runs from just after its
+ * own label to just before whichever label (from this list) comes next, or to
+ * the end of the section if none does. The page concatenates every field into
+ * one run of text with no delimiter but the next label, so the boundary has
+ * to be computed from the label positions rather than split on a character.
+ */
+const AUDIENCE_LABELS: { key: keyof NonNullable<ProductFacts["audience"]>; label: RegExp }[] = [
+  { key: "concerns", label: /concerns?:/i },
+  { key: "ageSuitability", label: /suitable for:/i },
+  { key: "pregnancySafe", label: /pregnancy\s*\/?\s*lactation:/i },
+  { key: "timing", label: /when to use:/i },
+];
+
+function scanLabelledFields(
+  text: string,
+  labels: { key: keyof NonNullable<ProductFacts["audience"]>; label: RegExp }[],
+  out: NonNullable<ProductFacts["audience"]>
+) {
+  const hits = labels
+    .map(({ key, label }) => {
+      const m = text.match(label);
+      return m && m.index !== undefined ? { key, start: m.index, end: m.index + m[0].length } : null;
+    })
+    .filter((h): h is { key: keyof NonNullable<ProductFacts["audience"]>; start: number; end: number } => h !== null)
+    .sort((a, b) => a.start - b.start);
+
+  for (let i = 0; i < hits.length; i++) {
+    const next = hits[i + 1];
+    const value = clean(text.slice(hits[i].end, next ? next.start : undefined));
+    if (value) out[hits[i].key] = value;
+  }
+}
+
+/**
+ * "Ideal For" and "How to Use" render as labelled key-value pairs, not free
+ * prose ("Concerns: Acne Marks, Acne Prone & Oily Skin Suitable for: 16+ years
+ * of age Pregnancy/Lactation: Safe"), so this reads the same way the trust
+ * badges do: structured, not scraped by guessing at sentence boundaries.
+ */
+export function extractAudience(sections: Section[]): ProductFacts["audience"] {
+  const idealFor = sections.find((s) => /ideal for/i.test(s.title));
+  const howToUse = sections.find((s) => /how to use/i.test(s.title));
+
+  const out: NonNullable<ProductFacts["audience"]> = {};
+  if (idealFor?.text) scanLabelledFields(idealFor.text, AUDIENCE_LABELS, out);
+  if (howToUse?.text) {
+    scanLabelledFields(howToUse.text, AUDIENCE_LABELS, out);
+    // The instruction line itself ("Apply 2-3 drops after cleansing...") has
+    // no label of its own; it is simply everything before "When to use:".
+    const m = howToUse.text.match(/when to use:/i);
+    const instruction = clean(m ? howToUse.text.slice(0, m.index) : howToUse.text);
+    if (instruction) out.howToUse = instruction;
+    // The page's own field value sometimes repeats its label ("When to use:
+    // When to use: AM & PM"), because the bold label and the field text
+    // both say it. Stripped rather than kept as noise in generated copy.
+    if (out.timing) out.timing = out.timing.replace(/^when to use:\s*/i, "");
+  }
+
+  return Object.keys(out).length > 0 ? out : undefined;
 }
 
 /**

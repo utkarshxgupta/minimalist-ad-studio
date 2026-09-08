@@ -67,6 +67,32 @@ check("salicylic page: a different product shape reads the same way", () => {
   eq(facts.trustBadges[3], "pH: 3.2 - 4.0", "this product's own pH range, not another's");
 });
 
+check("per-ingredient tab descriptions are kept, not just the number pulled out", () => {
+  // extractActives already reads these same tabs to pull a concentration
+  // number out and discards the sentence around it. This is the sentence.
+  const { facts } = extractFacts(loadFixture("niacinamide-10-with-matmarine"));
+  eq(facts.ingredientNotes.length, 3, "three ingredient tabs on this page");
+  eq(facts.ingredientNotes[0].ingredient, "Niacinamide", "first ingredient");
+  ok(facts.ingredientNotes[0].note.includes("superstar ingredient"), "keeps the real sentence");
+  ok(
+    !facts.ingredientNotes.some((n) => /what makes it potent|ideal for|how to use/i.test(n.ingredient)),
+    "content tabs are not mistaken for ingredient tabs"
+  );
+});
+
+check("audience fields are read from their own labels, not guessed from prose", () => {
+  const { facts } = extractFacts(loadFixture("niacinamide-10-with-matmarine"));
+  eq(facts.audience?.concerns, "Acne Marks, Acne Prone & Oily Skin", "concerns");
+  eq(facts.audience?.ageSuitability, "16+ years of age", "age suitability, not skin type");
+  eq(facts.audience?.pregnancySafe, "Safe", "pregnancy/lactation");
+  eq(facts.audience?.timing, "AM & PM. Everyday", "the redundant label prefix is stripped");
+});
+
+check("a product missing a field just omits it, rather than guessing", () => {
+  const { facts } = extractFacts(loadFixture("salicylic-acid-2"));
+  eq(facts.audience?.pregnancySafe, undefined, "this page states no pregnancy guidance");
+});
+
 check("page text stops at the product region", () => {
   const { facts } = extractFacts(loadFixture("niacinamide-10-with-matmarine"));
   // The storefront navigation lists six other products and a promotion. None of

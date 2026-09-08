@@ -113,6 +113,28 @@ export const ProductFacts = z.object({
    * facts a marketer would reasonably expect the tool to know about.
    */
   trustBadges: z.array(z.string()).default([]),
+  /**
+   * The per-ingredient tab's own descriptive sentence, keyed by the
+   * ingredient name the tab is titled with. Ingredient synergy copy is
+   * grounded against these, the same way a benefit claim is grounded against
+   * `statedBenefits`.
+   */
+  ingredientNotes: z.array(z.object({ ingredient: z.string(), note: z.string() })).default([]),
+  /**
+   * Labelled fields from the page's own "Ideal For" and "How to Use" tabs.
+   * Absent fields mean the page did not state them, not that extraction
+   * guessed and came up empty; every field present here is exactly what the
+   * page's own label said.
+   */
+  audience: z
+    .object({
+      concerns: z.string().optional(),
+      ageSuitability: z.string().optional(),
+      pregnancySafe: z.string().optional(),
+      timing: z.string().optional(),
+      howToUse: z.string().optional(),
+    })
+    .optional(),
   heroImageUrl: z.string().optional(),
   rawText: z.string(),
 });
@@ -173,6 +195,30 @@ export const AdCopy = z.object({
    */
   statBadge: z
     .object({ value: z.string(), label: z.string() })
+    .partial()
+    .default({}),
+  /**
+   * The "Mechanism of Action" archetype: a bold action verb plus how it
+   * works, up to three. Observed pattern in the corpus: "FIGHTS ACNE:
+   * provides potent anti-microbial activity against p-acne bacteria." Each
+   * mechanism is grounded like a claim; the verb is a label, not itself a
+   * fact to verify.
+   */
+  benefitBreakdown: z.array(z.object({ verb: z.string(), mechanism: z.string() })).default([]),
+  /**
+   * The "Ingredient Synergy" archetype: which named ingredients do what,
+   * grounded against `ProductFacts.ingredientNotes`, never invented — a model
+   * does not get to assert a synergy the product's own ingredient tab did not
+   * describe.
+   */
+  ingredientSynergy: z.array(z.object({ ingredient: z.string(), role: z.string() })).default([]),
+  /**
+   * The "Audience Qualification" archetype: who this is for and how to use
+   * it, grounded against `ProductFacts.audience`. Rendered as a small bordered
+   * grid, not prose, matching the brand's own layout for this content.
+   */
+  audienceGrid: z
+    .object({ concerns: z.string(), skinType: z.string(), howToUse: z.string(), timing: z.string() })
     .partial()
     .default({}),
   claimTrace: z.array(ClaimTrace),
