@@ -43,7 +43,24 @@ export interface Geometry {
  * rendered element and the canvas edge. Real packshots are never bled to the
  * frame edge.
  */
-export const MIN_MARGIN = 0.05;
+export const MIN_MARGIN = 0.08;
+
+/**
+ * The product box never exceeds this fraction of canvas height.
+ *
+ * From the creative audit: "lock container scaling so product cutouts never
+ * exceed 65% of canvas height, maintaining a minimum 120px padding from canvas
+ * edges", benchmarked against the brand's own production creatives. The split
+ * layout ran the product to 82 percent, which is why that composition read as
+ * a packshot with words next to it rather than an ad: at that size the product
+ * is the frame, and the copy is a caption on it.
+ *
+ * 120px on a 1080 canvas is 11 percent. MIN_MARGIN is set to 8 rather than
+ * that, because the audit's figure is one house style's and a margin large
+ * enough to be safe on every layout starts costing the copy column real room.
+ * The cap on height is the load-bearing half.
+ */
+export const MAX_PRODUCT_HEIGHT = 0.65;
 
 /**
  * Platform safe zones, as a fraction of canvas height, where a Story or Reel
@@ -56,24 +73,31 @@ export function geometryFor(p: Placement): Geometry {
   switch (p.layout) {
     case "split":
       return {
-        product: { x: 0.52, y: 0.08, w: 0.42, h: 0.82 },
-        copy: { x: 0.06, y: 0, w: 0.44, h: 1 },
+        product: { x: 0.54, y: 0.18, w: 0.38, h: 0.64 },
+        copy: { x: 0.08, y: 0, w: 0.42, h: 1 },
         align: "center",
       };
     case "tall":
       // Sized to clear both Story safe zones, not just fit the canvas.
       // Regression: an earlier layout ran the product box to y=0.86, into the
       // zone Instagram overlays with its own caption and reply-bar UI.
+      //
+      // Then, having moved the product out of that zone, the first version of
+      // this left a band of empty canvas between the copy and the product:
+      // "all copy squeezed into the top third, leaving a vacant center block",
+      // exactly as the creative audit described it. Clearing a safe zone is
+      // not the same as composing the space that clearing it created. The
+      // product now starts where the copy stops and takes the room back.
       return {
-        product: { x: 0.14, y: 0.48, w: 0.72, h: 0.28 },
-        copy: { x: 0.07, y: 0.14, w: 0.86, h: 0.32 },
+        product: { x: 0.13, y: 0.40, w: 0.74, h: 0.36 },
+        copy: { x: 0.08, y: 0.14, w: 0.84, h: 0.24 },
         align: "start",
       };
     case "stacked":
     default:
       return {
-        product: { x: 0.22, y: 0.06, w: 0.56, h: 0.42 },
-        copy: { x: 0.07, y: 0.52, w: 0.86, h: 0.42 },
+        product: { x: 0.24, y: 0.08, w: 0.52, h: 0.40 },
+        copy: { x: 0.08, y: 0.52, w: 0.84, h: 0.42 },
         align: "start",
       };
   }
@@ -91,9 +115,24 @@ function within(box: Box): boolean {
   );
 }
 
-/** True if every edge of `box` clears the canvas edge by at least `margin`. */
+/**
+ * True if every edge of `box` clears the canvas edge by at least `margin`.
+ *
+ * The epsilon is not slack in the rule, it is float arithmetic: a box at
+ * x=0.54 with w=0.38 leaves exactly the 0.08 margin it was written to leave,
+ * and `1 - (0.54 + 0.38)` evaluates to 0.0799999999999999. `within` already
+ * carries the same tolerance for the same reason.
+ */
+const EPSILON = 1e-9;
+
 export function hasMargin(box: Box, margin = MIN_MARGIN): boolean {
-  return within(box) && box.x >= margin && box.y >= margin && 1 - (box.x + box.w) >= margin && 1 - (box.y + box.h) >= margin;
+  return (
+    within(box) &&
+    box.x >= margin - EPSILON &&
+    box.y >= margin - EPSILON &&
+    1 - (box.x + box.w) >= margin - EPSILON &&
+    1 - (box.y + box.h) >= margin - EPSILON
+  );
 }
 
 /** True if `box` does not intrude into a Story/Reel platform safe zone. */

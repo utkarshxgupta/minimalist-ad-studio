@@ -106,6 +106,24 @@ export default function GeneratePage() {
     // it a second way, so the two do not depend on each other to be enough.
     await document.fonts.ready;
 
+    // And wait for the product photograph, for the same class of reason. The
+    // artboard reads the photo's own backdrop colour once the image has
+    // decoded and repaints the canvas to match; capture before that lands and
+    // the exported PNG has the fallback canvas behind a product photograph
+    // that does not sit on it, which is the visible rectangle all over again.
+    // Observed while screenshotting the artboard headlessly, where the capture
+    // really was that fast. A person clicking Export rarely is, but "rarely"
+    // is how the last export-only defect got shipped.
+    const photos = Array.from(board.current.querySelectorAll("img"));
+    await Promise.all(
+      photos.map((img) =>
+        img.complete ? Promise.resolve() : new Promise((done) => { img.onload = img.onerror = () => done(null); })
+      )
+    );
+    // Two frames, so React has flushed the state the load handler set.
+    await new Promise(requestAnimationFrame);
+    await new Promise(requestAnimationFrame);
+
     const png = await toPng(board.current, {
       width: current.placement.width,
       height: current.placement.height,

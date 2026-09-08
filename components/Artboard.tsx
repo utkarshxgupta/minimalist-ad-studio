@@ -64,6 +64,16 @@ export interface ArtboardProps {
 const BRAND_STACK =
   '"Proxima Nova", ProximaNovaRegular, var(--font-brand), var(--font-geist-sans), system-ui, sans-serif';
 
+/**
+ * The lab monospace, for concentrations and pH.
+ *
+ * The brand's own spec reserves a monospace face for "concentrations, pH
+ * levels, vehicle types and sub-labels", and it is the detail that makes a
+ * skincare ad read as a datasheet rather than a cosmetics ad. Setting "10%" in
+ * the same face as the headline throws that away.
+ */
+const MONO_STACK = '"SF Mono", Monaco, var(--font-geist-mono), ui-monospace, monospace';
+
 const INK = "#16130f";
 const MUTED = "#4a423a";
 /**
@@ -210,18 +220,32 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
             color: INK,
           }}
         >
+          {/*
+            The wordmark, set the way the brand actually sets it.
+
+            This rendered "M I N I M A L I S T" at 0.28em tracking, which the
+            creative audit flagged and which the brand's own spec contradicts
+            outright: the mark is tight, at -0.01em. Looking at the live site
+            settles it, because the logo is sentence-case "Minimalist" in a
+            heavy geometric cut, not letterspaced caps.
+
+            It was worse than a styling slip. The product photograph in the
+            same frame carries the real logotype on the label, so every ad
+            this tool produced showed the brand's wordmark twice, two
+            different ways, a few hundred pixels apart.
+          */}
           <div
             style={{
               position: "absolute",
               top: pad,
               left: pad,
-              fontSize: Math.round(19 * u),
-              letterSpacing: "0.28em",
-              fontWeight: 600,
+              fontSize: Math.round(30 * u),
+              letterSpacing: "-0.01em",
+              fontWeight: 700,
               ...nowrap,
             }}
           >
-            MINIMALIST
+            Minimalist
           </div>
 
           {sceneImage && (
@@ -469,6 +493,7 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
                   border: "1px solid rgba(22,19,15,0.28)",
                   borderRadius: 999,
                   fontSize: Math.round(17 * u),
+                  fontFamily: MONO_STACK,
                   ...nowrap,
                 }}
               >
@@ -487,7 +512,11 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
                 }}
               >
                 {copy.statBadge.value && (
-                  <div style={{ fontSize: Math.round(24 * u), fontWeight: 700, ...nowrap }}>{copy.statBadge.value}</div>
+                  <div
+                    style={{ fontSize: Math.round(26 * u), fontWeight: 700, fontFamily: MONO_STACK, ...nowrap }}
+                  >
+                    {copy.statBadge.value}
+                  </div>
                 )}
                 {copy.statBadge.label && (
                   <div style={{ fontSize: Math.round(14 * u), color: MUTED, ...nowrap }}>{copy.statBadge.label}</div>

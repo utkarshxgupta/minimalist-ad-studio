@@ -505,3 +505,59 @@ Worth noting what it took to surface: a background grep of my own transcript,
 run for an unrelated reason and read after the fix had already shipped. Three
 of these corrections now share this shape, which makes it the most persistent
 defect in the project, and it is mine rather than the code's.
+
+---
+
+## C-015: The rest of the creative audit, worked through instead of agreed with
+
+**Claimed.** The creative audit was answered point by point, sorted into what
+it got right, what I had already found, and what was overstated. That reply was
+accurate and it was not a fix.
+
+**Actual.** Going back through the audit line by line, months of work later,
+three of its findings were still live in the code:
+
+*The brand wordmark.* The artboard set `M I N I M A L I S T` at 0.28em
+tracking. The audit called it "artificial, wide letter-spacing"; the brand's own
+spec puts the wordmark at **-0.01em**; and the live site settles it, because the
+logo is sentence-case "Minimalist" in a heavy geometric cut, not letterspaced
+capitals. I had waved this away as an unverifiable font claim. Verifying it
+took one page load. It was also worse than a styling slip: the packshot in the
+same frame carries the real logotype on the label, so every ad this tool
+produced showed the wordmark twice, two different ways, inches apart.
+
+*The packshot bounding box.* The audit asked for product cutouts capped at 65
+percent of canvas height with generous edge padding. The split layout ran the
+product to **82 percent** at a 5 percent margin, which is why that composition
+read as a packshot with words beside it rather than an ad.
+
+*The Story dead zone.* The audit described "all copy squeezed into the top
+third, leaving a vacant center block". I fixed the half of that finding that
+was a safe-zone violation, moved the product out of Instagram's UI band, and
+left the band of empty canvas the move created. Clearing a safe zone is not the
+same as composing the space that clearing it made.
+
+Also outstanding and now closed: the scorecard's "missing monospace clinical
+badges". The brand spec reserves a monospace face for concentrations, pH and
+sub-labels, and the concentration pill was set in the headline face.
+
+**Fix.** Wordmark set as the brand sets it. `MAX_PRODUCT_HEIGHT = 0.65` and
+`MIN_MARGIN` raised to 0.08, both asserted for every placement. Story product
+moved up to take back the vacant band. Concentrations and stat values set in
+the lab monospace. Verified by rendering all four placements and reading the
+pixels, not by looking.
+
+**Left open deliberately.** The sub-brand lockups (SKIN SCIENCE, HAIR SCIENCE,
+PEDIATRICS) are not built. That data is not in anything the product page
+exposes to the extractor: it is printed on the pack in the photograph and
+nowhere in the JSON, the tags, or the page copy. Printing "SKIN SCIENCE" under
+the wordmark by inferring it from the product name would put a sub-brand on a
+real company's ad on the strength of a guess, which is the exact failure class
+this project exists to prevent. It needs a real SKU registry field, which is
+what the spec proposes and what does not exist yet.
+
+**What it says.** This is the second time in two sessions that going back to a
+source document found live defects in code I had already "responded to". The
+response is not the work. An audit finding is closed when a test asserts it or
+the code visibly changed, and until then it is a note about something still
+broken, however thoroughly it was agreed with.

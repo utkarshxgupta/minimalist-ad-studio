@@ -26,6 +26,7 @@ import {
   hasMargin,
   clearsStorySafeZone,
   MIN_MARGIN,
+  MAX_PRODUCT_HEIGHT,
 } from "../lib/generator/artboard-geometry";
 
 const FACTS: ProductFacts = {
@@ -505,6 +506,20 @@ check("the product never touches the canvas edge, on any layout", () => {
   for (const p of PLACEMENT_LIST) {
     const geo = geometryFor(p);
     ok(hasMargin(geo.product, MIN_MARGIN), `${p.id} product box: ${JSON.stringify(geo.product)}`);
+  }
+});
+
+check("the product never dominates the frame on any layout", () => {
+  // From the creative audit, benchmarked against the brand's own production
+  // creatives: product cutouts never exceed 65 percent of canvas height. The
+  // split layout ran to 82, which is why that composition read as a packshot
+  // with words beside it rather than an ad.
+  for (const p of PLACEMENT_LIST) {
+    const geo = geometryFor(p);
+    ok(
+      geo.product.h <= MAX_PRODUCT_HEIGHT,
+      `${p.id} product is ${Math.round(geo.product.h * 100)}% of canvas height`
+    );
   }
 });
 
