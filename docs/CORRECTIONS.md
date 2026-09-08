@@ -460,11 +460,21 @@ told a reader who is already on the product page, a few hundred pixels from the
 real buy button, to go shopping.
 
 **How it was caught.** Reported by the user, asking whether I had forgotten what
-the spec said about the CTA. I had: I read the spec, took the channel split and
-the archetypes from it, and read `call_to_action` as ad copy to render rather
-than as the platform field it is sitting in an object literally named
-`meta_ad_copy`. Confirmed afterwards in the Meta Ad Library, where every ad card
-shows the button drawn by Meta below the creative.
+the spec said about the CTA. Confirmed afterwards in the Meta Ad Library, where
+every ad card shows the button drawn by Meta below the creative.
+
+**But that is not how it was first caught.** Searching the transcript turned up
+that the creative audit had already flagged "the burned-in CTA button", and that
+I had answered it under a heading reading *Right, and I missed it*:
+
+> The burned-in `Shop Now` button. Meta supplies a native CTA below the
+> creative, so mine is redundant clutter. I would soften "never", plenty of
+> brands do burn CTAs, especially organic, but on paid feed it is wrong.
+
+In the same reply I proposed the fix, as one of a list of layout assertions:
+"no burned CTA on paid Meta". Then I built none of it, and two sessions later
+described the cause as a misreading. The diagnosis was correct the first time
+and simply went unbuilt.
 
 **Fix.** `Placement.ctaSurface` decides where the call to action lives:
 `platform` for Meta, `none` for a PDP listing. The artboard draws no button.
@@ -475,8 +485,23 @@ since a generator that produces "Discover the science" has produced something
 nobody can select in Ads Manager. Both surfaces now present it as an ad field
 beside the caption, not as a line of the creative.
 
-**What it says.** The failure was not missing the spec. It was reading a data
-contract as prose: `meta_ad_copy.call_to_action` says exactly where that value
-belongs, in the field name, and I mapped it onto the nearest thing my own model
-already had. Adopting someone else's model in pieces means the pieces get bent
-to fit the model you arrived with.
+**What it says.** There are two failures here and only one of them is
+interesting.
+
+The small one is reading a data contract as prose: `meta_ad_copy.call_to_action`
+says where that value belongs in its own field name, and I mapped it onto the
+nearest thing my model already had.
+
+The real one is C-012 for the third time. I had already found this, written it
+down, agreed with it in the strongest terms available, and specified the check
+that would enforce it. What was missing was not analysis. Analysis is the part
+of this job that feels like progress and costs nothing to produce; a written
+list of correct observations reads like work and ships no ads. Every item on
+that list should have become a test or a line in the docs the same day, because
+an acknowledgement with no artefact attached to it is indistinguishable, one
+session later, from never having noticed at all.
+
+Worth noting what it took to surface: a background grep of my own transcript,
+run for an unrelated reason and read after the fix had already shipped. Three
+of these corrections now share this shape, which makes it the most persistent
+defect in the project, and it is mine rather than the code's.
