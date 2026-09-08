@@ -9,7 +9,7 @@
  *   npm run generate -- <url> --placements meta_story_9x16,pdp_listing_11x16
  *   npm run generate -- <url> --angle "monsoon, oily skin" --mode creative
  *   npm run generate -- <url> --mode creative --archetype synergy
- *   npm run generate -- <url> --mode creative --hint "glass droplets" --out prop.png
+ *   npm run generate -- <url> --mode creative --hint "warm stone, hard light" --out frame.png
  */
 import { writeFileSync } from "node:fs";
 import { generateAd, adText, ARCHETYPES, type Archetype, type Attempt } from "../lib/generator";
@@ -88,19 +88,25 @@ async function main() {
   for (const w of run.factWarnings) console.log(`  fact warning: ${w}`);
   console.log(`  actives: ${run.facts.actives.map((a) => `${a.ingredient} ${a.concentration}`).join(", ") || "(none)"}`);
 
-  if (run.prop) {
-    console.log(`  prop: ${run.prop.model}`);
-    for (const r of run.prop.hint.rejected) console.log(`  hint rejected "${r.phrase}": ${r.why}`);
-    const out = flag("out");
-    if (out) {
-      writeFileSync(out, Buffer.from(run.prop.data, "base64"));
-      console.log(`  prop written to ${out}`);
-    }
-  }
-  if (run.propError) console.log(`  prop failed: ${run.propError}`);
+
 
   for (const p of run.placements) {
     console.log(`\n${p.placement.label}  ${p.placement.width}x${p.placement.height}  [${p.placement.channel}]`);
+
+    if (p.scene) {
+      const tries = p.sceneAttempts && p.sceneAttempts > 1 ? `  (${p.sceneAttempts} frames, earlier ones rejected)` : "";
+      console.log(`    frame: ${p.scene.model} at ${p.placement.imageAspect}${tries}`);
+      for (const r of p.scene.hint.rejected) console.log(`    art direction rejected "${r.phrase}": ${r.why}`);
+      const out = flag("out");
+      if (out) {
+        // One frame per placement, so a multi-placement run needs one file each
+        // rather than four writes to the same path.
+        const file = run.placements.length > 1 ? out.replace(/(\.\w+)?$/, `-${p.placement.id}$1`) : out;
+        writeFileSync(file, Buffer.from(p.scene.data, "base64"));
+        console.log(`    frame written to ${file}`);
+      }
+    }
+    if (p.sceneError) console.log(`    frame not used: ${p.sceneError}`);
 
     p.attempts.forEach((a, i) => printAttempt(a, i === p.chosen));
 

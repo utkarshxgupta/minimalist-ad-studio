@@ -79,44 +79,6 @@ export function geometryFor(p: Placement): Geometry {
   }
 }
 
-/**
- * Where the creative-mode prop accent sits: a small square, guaranteed clear
- * of the product's own box.
- *
- * The first version centred a large prop on the product box, on the theory
- * that it would read as a motif surrounding the bottle. On the split layout,
- * where the product fills up to 82 percent of the canvas, that put the prop's
- * actual graphic content directly behind the opaque product photo: invisible,
- * with only its blank white margin showing elsewhere, which multiplies away
- * to nothing. Caught by looking at the rendered output, not by reasoning
- * about the layout math, which is exactly why this is a function with a test
- * rather than an inline style rule: the failure mode is silent.
- */
-const PROP_GAP = 0.01;
-const PROP_MAX_SIZE = 0.16;
-
-export function propAccentFor(p: Placement): Box {
-  const product = geometryFor(p).product;
-  const edge = 1 - MIN_MARGIN;
-
-  if (p.layout === "split") {
-    // The product spans nearly the full canvas height here (up to 82
-    // percent), so the band beside it is a hairline gutter but the band
-    // beneath it is real, if narrow. Sized to what that band actually is,
-    // not to a fixed fraction: a fixed size is what put the prop's own
-    // graphic behind the opaque product photo the first time.
-    const y = product.y + product.h + PROP_GAP;
-    const size = Math.max(0, Math.min(PROP_MAX_SIZE, edge - y));
-    return { x: edge - size, y, w: size, h: size };
-  }
-
-  // "tall" and "stacked" both centre the product horizontally, leaving real
-  // margin to its right, not a hairline. The accent rides beside it, top
-  // aligned with the product's own top edge.
-  const x = product.x + product.w + PROP_GAP;
-  const size = Math.max(0, Math.min(PROP_MAX_SIZE, edge - x, edge - product.y));
-  return { x, y: product.y, w: size, h: size };
-}
 
 /** True if two fractional boxes overlap at all. */
 export function overlaps(a: Box, b: Box): boolean {

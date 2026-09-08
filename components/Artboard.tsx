@@ -3,8 +3,8 @@
 import { forwardRef, useState } from "react";
 import type { AdCopy, ProductFacts } from "@/lib/types";
 import type { Placement } from "@/lib/generator/placements";
-import { geometryFor, propAccentFor, type Box } from "@/lib/generator/artboard-geometry";
-import { sampleBackdrop } from "@/lib/generator/hero-backdrop";
+import { geometryFor, type Box } from "@/lib/generator/artboard-geometry";
+import { sampleBackdrop, type HeroGround } from "@/lib/generator/hero-backdrop";
 
 /**
  * The creative, at whatever size the placement asks for.
@@ -39,11 +39,23 @@ export interface ArtboardProps {
   copy: AdCopy;
   facts: ProductFacts;
   placement: Placement;
-  /** Optional creative-mode prop graphic, as a data URI. Never the product itself. */
-  propImage?: string;
+  /**
+   * Creative mode's generated frame, as a data URI: a finished art-directed
+   * scene with the product already in it. When present it is the whole
+   * picture, so the packshot layer is not drawn on top of it.
+   */
+  sceneImage?: string;
   /** Preview width in CSS pixels. The captured node is always full size. */
   previewWidth?: number;
 }
+
+/**
+ * The brand face first, so a machine with the Proxima Nova licence installed
+ * renders and exports the real thing. Figtree is the committed stand-in; see
+ * the note in `app/layout.tsx`.
+ */
+const BRAND_STACK =
+  '"Proxima Nova", ProximaNovaRegular, var(--font-brand), var(--font-geist-sans), system-ui, sans-serif';
 
 const INK = "#16130f";
 const MUTED = "#4a423a";
@@ -68,6 +80,21 @@ const AUDIENCE_FIELDS: { key: keyof AdCopy["audienceGrid"]; label: string }[] = 
   { key: "timing", label: "When" },
 ];
 
+/**
+ * The copy box, extended to the canvas edges behind it.
+ *
+ * A scrim exactly the size of the text block looks like a pasted card. Bleeding
+ * it to the edges the copy column already sits against, and fading it out on
+ * the one edge facing the product, makes it read as part of the frame's own
+ * light.
+ */
+function scrimBox(copy: Box, layout: "split" | "stacked" | "tall"): Box {
+  const pad = 0.06;
+  if (layout === "split") return { x: 0, y: 0, w: Math.min(1, copy.x + copy.w + pad), h: 1 };
+  if (layout === "tall") return { x: 0, y: 0, w: 1, h: Math.min(1, copy.y + copy.h + pad) };
+  return { x: 0, y: Math.max(0, copy.y - pad), w: 1, h: 1 - Math.max(0, copy.y - pad) };
+}
+
 function px(box: Box, W: number, H: number) {
   return {
     left: Math.round(box.x * W),
@@ -78,7 +105,7 @@ function px(box: Box, W: number, H: number) {
 }
 
 export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artboard(
-  { copy, facts, placement, propImage, previewWidth = 380 },
+  { copy, facts, placement, sceneImage, previewWidth = 380 },
   ref
 ) {
   const { width: W, height: H, layout } = placement;
@@ -88,8 +115,20 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
   // The photograph's own studio backdrop, once it has loaded and been read.
   // Null until then, and null forever for a cut-out or dark-ground image, so
   // the brand canvas is both the starting value and the fallback.
-  const [backdrop, setBackdrop] = useState<string | null>(null);
-  const ground = backdrop ?? CANVAS;
+  const [heroGround, setHeroGround] = useState<HeroGround | null>(null);
+
+  // A generated frame is full-bleed, so it is its own ground and the sampled
+  // packshot colour is irrelevant.
+  const ground = sceneImage ? CANVAS : heroGround?.color ?? CANVAS;
+
+  // The synthetic shadow is drawn only for a cut-out. `drop-shadow` follows an
+  // image's alpha silhouette, so on a transparent PNG it traces the bottle,
+  // which is what it was for. The brand's packshots have no alpha at all, so
+  // it traced the image's four edges instead and drew a soft box around the
+  // photograph: the outline that made a colour-matched packshot still read as
+  // a rectangle pasted onto the canvas. The photography already carries its
+  // own studio shadow under the bottle, so there was never anything to add.
+  const shadow = heroGround?.opaque === false ? "drop-shadow(0 18px 26px rgba(30,24,16,0.16))" : undefined;
 
   const hero = facts.heroImageUrl ? `/api/image-proxy?url=${encodeURIComponent(facts.heroImageUrl)}` : null;
   const active = facts.actives[0];
@@ -100,14 +139,24 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
   const pad = Math.round(48 * u);
 
   const productPx = px(geo.product, W, H);
-  const propPx = px(propAccentFor(placement), W, H);
   const copyPx = px(geo.copy, W, H);
+
+  // The scrim is the copy box bled out to the canvas edges it already touches,
+  // so it reads as a field the type sits on rather than a floating panel.
+  const copyScrimPx = px(scrimBox(geo.copy, layout), W, H);
   const headlineSize = Math.round((layout === "tall" ? 74 : 56) * u);
 
   // On a tall format the copy column sits above the product, so a footnote
   // anchored to the canvas bottom would land on the bottle and be unreadable.
   // It rides with the copy instead. The disclaimer has to be legible to count.
-  const footnoteInFlow = layout === "tall" || layout === "stacked";
+  //
+  // A generated frame forces the same choice for a different reason: the scrim
+  // that keeps the copy readable covers the copy column, and a footnote pinned
+  // to the canvas edge sits outside it, over whatever the scene happens to put
+  // there. On the first composite that was pale concrete, and the disclaimer
+  // was effectively invisible. A claim whose evidence the reader cannot read
+  // is not substantiated to the reader, so it rides with the copy instead.
+  const footnoteInFlow = layout === "tall" || layout === "stacked" || Boolean(sceneImage);
 
   const footnoteStyle: React.CSSProperties = {
     fontSize: Math.round(14 * u),
@@ -150,7 +199,7 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
             position: "relative",
             overflow: "hidden",
             background: ground,
-            fontFamily: "var(--font-geist-sans), system-ui, sans-serif",
+            fontFamily: BRAND_STACK,
             color: INK,
           }}
         >
@@ -168,50 +217,48 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
             MINIMALIST
           </div>
 
-          {propImage && (
-            // A small generated graphic, never the product. Positioned as a
-            // prop near the product rather than as a full-bleed backdrop, the
-            // same relationship the brand's own banners use: a molecule motif
-            // woven through hair, a scattering of glass droplets, never a
-            // painted environment behind the whole frame.
+          {sceneImage && (
+            // The generated frame, full-bleed. It is the entire picture: the
+            // scene, the light, and the product, composed together by the
+            // image model from the real photograph, at this placement's own
+            // aspect ratio so nothing has to be cropped to fit.
             //
-            // Rendered by the model on a flat white background and blended
-            // with multiply rather than composited with opacity: white
-            // disappears under multiply regardless of the canvas's exact
-            // tone, so this cannot reproduce the colour-temperature seam a
-            // full generated backdrop had. Coherent by construction, the same
-            // fix as the flat canvas itself.
-            //
-            // Sized and placed as a corner accent, not centred behind the
-            // product. The product box fills up to 82 percent of the canvas
-            // on some layouts, so a prop sized and centred to "surround" it,
-            // the first version of this, put the prop's own graphic directly
-            // underneath the opaque product photo: invisible, because it was
-            // sitting behind an opaque photo, with only its blank white
-            // margin showing elsewhere, which multiplies away to nothing.
-            // Caught by looking at the actual render, not by reasoning about
-            // the layout math.
+            // The packshot layer below is skipped when this is present. There
+            // is exactly one product in the frame and it is this one, which is
+            // the whole reason the gate makes a human sign for it.
             // eslint-disable-next-line @next/next/no-img-element
             <img
-              src={propImage}
+              src={sceneImage}
               alt=""
+              style={{ position: "absolute", inset: 0, width: "100%", height: "100%", objectFit: "cover", zIndex: 0 }}
+            />
+          )}
+
+          {sceneImage && (
+            // A legibility scrim behind the copy column only, not the whole
+            // frame. The scene is prompted to leave this area calm, and this
+            // is what makes the type readable when it does not. Weak enough
+            // to keep the photograph looking like a photograph.
+            <div
               style={{
                 position: "absolute",
-                ...propPx,
-                objectFit: "contain",
-                mixBlendMode: "multiply",
-                zIndex: 0,
+                ...copyScrimPx,
+                zIndex: 1,
+                background:
+                  layout === "split"
+                    ? "linear-gradient(90deg, rgba(246,245,242,0.94) 0%, rgba(246,245,242,0.86) 62%, rgba(246,245,242,0) 100%)"
+                    : "linear-gradient(0deg, rgba(246,245,242,0.94) 0%, rgba(246,245,242,0.86) 62%, rgba(246,245,242,0) 100%)",
               }}
             />
           )}
 
-          {hero && (
+          {!sceneImage && hero && (
             <div
               style={{
                 position: "absolute",
                 ...productPx,
-                filter: "drop-shadow(0 18px 26px rgba(30,24,16,0.16))",
-                zIndex: 1,
+                filter: shadow,
+                zIndex: 2,
               }}
             >
               {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -219,7 +266,7 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
                 src={hero}
                 alt={facts.name}
                 crossOrigin="anonymous"
-                onLoad={(e) => setBackdrop(sampleBackdrop(e.currentTarget))}
+                onLoad={(e) => setHeroGround(sampleBackdrop(e.currentTarget))}
                 style={{
                   width: "100%",
                   height: "100%",
@@ -237,7 +284,7 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
               flexDirection: "column",
               alignItems: "flex-start",
               justifyContent: geo.align === "center" ? "center" : "flex-start",
-              zIndex: 2,
+              zIndex: 3,
               ...copyPx,
             }}
           >

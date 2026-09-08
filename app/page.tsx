@@ -73,7 +73,10 @@ export default function GeneratePage() {
 
   const current: PlacementRun | undefined = run?.placements[active];
   const attempt = current?.attempts[shown];
-  const propImage = run?.prop ? `data:${run.prop.mimeType};base64,${run.prop.data}` : undefined;
+  // The frame belongs to the placement, not the run: each aspect gets its own
+  // composition, so paging between placements changes the picture too.
+  const scene = current?.scene;
+  const sceneImage = scene ? `data:${scene.mimeType};base64,${scene.data}` : undefined;
 
   // Recomputed for the attempt actually on screen, not taken from the run. The
   // marketer can page back to an earlier attempt, and a gate that describes a
@@ -212,8 +215,9 @@ export default function GeneratePage() {
 
           {mode === "photographic" ? (
             <p className="mt-2 text-xs text-muted">
-              The real product photo on a flat brand canvas. No image model runs; nothing to generate
-              means nothing that can drift out of the frame or clash with the photo&apos;s own lighting.
+              The real product photo, on a canvas taken from the photograph&apos;s own studio ground so
+              there is no seam, with the copy typeset over it. No image model touches the picture, so
+              nothing in the frame can be a fact the product page did not state.
             </p>
           ) : (
             <>
@@ -244,7 +248,7 @@ export default function GeneratePage() {
                 </p>
               )}
 
-              <div className="label mt-3">Prop direction</div>
+              <div className="label mt-3">Art direction</div>
               <input
                 className="field mt-1"
                 placeholder="glass droplets, molecular motif..."
@@ -252,10 +256,15 @@ export default function GeneratePage() {
                 onChange={(e) => setHint(e.target.value)}
               />
               <p className="mt-2 text-xs text-muted">
-                Adds one generated prop graphic beside the real product. The product photo is given to
-                the image model only as a reference for scale and colour; it is told, repeatedly, never
-                to redraw the product itself, and the result is checked for exactly that before it is
-                used.
+                The real product photo goes to the image model, which composes a finished frame with the
+                product inside a scene, one per placement at its own aspect ratio. The copy is still
+                typeset over it here, never drawn by the image model, so every word is still scored.
+              </p>
+              <p className="mt-2 border-l-2 border-warn pl-2 text-xs text-muted">
+                The pack in this mode is redrawn by a model, not photographed, so it can alter a label
+                or a concentration in a way that looks entirely normal. A frame carrying invented text
+                is discarded outright, and what survives can never export freely: creative mode always
+                costs a logged human override. Photographic mode is the default for that reason.
               </p>
             </>
           )}
@@ -297,12 +306,20 @@ export default function GeneratePage() {
                 {w}
               </p>
             ))}
-            {run.propError && <p className="mt-2 text-xs text-warn">Creative prop: {run.propError}</p>}
-            {run.prop && run.prop.hint.rejected.length > 0 && (
+            {current?.sceneError && (
+              <p className="mt-2 text-xs text-warn">Generated frame: {current.sceneError}</p>
+            )}
+            {scene && (current?.sceneAttempts ?? 1) > 1 && (
+              <p className="mt-2 text-xs text-muted">
+                {current?.sceneAttempts} frames were generated for this placement. The earlier ones
+                misspelled text printed on the real pack and were discarded.
+              </p>
+            )}
+            {scene && scene.hint.rejected.length > 0 && (
               <div className="mt-2">
-                <div className="label">Prop hint, rejected terms</div>
+                <div className="label">Art direction, rejected terms</div>
                 <ul className="mt-1 space-y-0.5 text-xs text-muted">
-                  {run.prop.hint.rejected.map((r, i) => (
+                  {scene.hint.rejected.map((r, i) => (
                     <li key={i}>
                       <span className="font-mono">{r.phrase}</span> {r.why}
                     </li>
@@ -355,7 +372,7 @@ export default function GeneratePage() {
                     copy={attempt.copy}
                     facts={run.facts}
                     placement={current.placement}
-                    propImage={propImage}
+                    sceneImage={sceneImage}
                     previewWidth={380}
                   />
                 ) : (

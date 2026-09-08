@@ -1,6 +1,7 @@
 import type { Dimension, Finding, ProductFacts, ScoreResult } from "@/lib/types";
 import { computeVerdict, dimensionScores, scoreAd } from "@/lib/scorer";
-import { generateCreativeProp, scoreCreativeProp, type PropResult } from "./creative";
+import { generateCreativeScene, scoreCreativeScene, type SceneResult } from "./creative";
+import { findCorruptedPackText } from "./pack-text";
 import { adText, generateCopy } from "./copy";
 import { getProductFacts, type FactsResult } from "./facts";
 import { avoidList, chooseBest, decide, shouldRetry, type Attempt, type GateDecision } from "./gate";
@@ -25,12 +26,17 @@ import {
  * words and substantiation does not fit in six words, so the short formats are
  * where evidence gets squeezed out. Sharing copy across them would hide that.
  *
- * Two modes. Photographic, the default, calls no image model at all: a flat
- * brand canvas cannot produce the colour-temperature seam a generated
- * backdrop did, because there is only one photograph in the frame. Creative is
- * opt-in and adds one generated prop graphic, shared across every placement in
- * the run, plus the checklist and stat-badge elements observed on the brand's
- * own homepage banners.
+ * Two modes. Photographic, the default, calls no image model for the picture
+ * at all: it composites the real packshot onto a canvas taken from the
+ * photograph's own ground and typesets over it. Creative is opt-in and sends
+ * the real product photo to an image model, which returns a finished
+ * art-directed frame with the product inside a scene; the copy is still
+ * typeset over it in CSS, so every word is still scored.
+ *
+ * A creative-mode frame is generated per placement rather than once per run.
+ * A composition built for a square puts the product in one half and the calm
+ * space in the other, and rescaling that into a story crops one or the other.
+ * Same reasoning as the channel split, applied to the picture.
  */
 
 export interface GenerationOptions extends Brief {
@@ -42,17 +48,23 @@ export interface GenerationOptions extends Brief {
    * mode, which renders none of them.
    */
   archetype?: Archetype;
-  /** Style direction for the creative-mode prop. Deny-list checked before it reaches an image model. */
+  /** Art direction for the creative-mode frame. Deny-list checked before it reaches an image model. */
   propHint?: string;
 }
 
-/** One placement's worth of output: its attempt chain and its own gate decision. */
+/** One placement's worth of output: its attempt chain, its frame, and its own gate decision. */
 export interface PlacementRun {
   placement: Placement;
   attempts: Attempt[];
   /** Index into `attempts` of the one to show. Not always the last. */
   chosen: number;
   decision: GateDecision;
+  /** The generated frame this placement's copy is typeset over. Absent in photographic mode. */
+  scene?: SceneResult;
+  /** Why there is no frame, when creative mode was asked for and could not deliver one. */
+  sceneError?: string;
+  /** How many frames were generated for this placement. More than one means frames were rejected. */
+  sceneAttempts?: number;
 }
 
 export interface GenerationRun {
@@ -66,10 +78,6 @@ export interface GenerationRun {
   mode: Mode;
   /** Which content block the creative-mode ads carry. Recorded, not inferred from the copy. */
   archetype: Archetype;
-  /** The one generated prop, shared across every placement. Absent in photographic mode. */
-  prop?: PropResult;
-  propError?: string;
-
   placements: PlacementRun[];
   /** Campaign rollup, so a marketer sees the shape of the batch at a glance. */
   summary: { total: number; free: number; override: number; blocked: number };
@@ -81,35 +89,45 @@ export async function generateAd(url: string, opts: GenerationOptions = {}): Pro
   const archetype: Archetype = opts.archetype ?? "statement";
   const placements = (opts.placements?.length ? opts.placements : [DEFAULT_PLACEMENT]).map(getPlacement);
 
-  // One prop for the whole run, not one per placement. It is a small
-  // decorative graphic, not a per-aspect backdrop, so there is nothing to gain
-  // from generating it more than once, and image generation is the slowest
-  // and priciest call here by an order of magnitude.
-  const propJob = mode === "creative" ? runCreativeProp(facts.facts, opts.propHint ?? "") : Promise.resolve(null);
-
   const factsContext = JSON.stringify(facts.facts, null, 2);
 
-  // Placements run in parallel. They share nothing but the facts and the mode.
+  // Placements run in parallel, and within each one the copy and the frame run
+  // in parallel too: they do not depend on each other, and image generation is
+  // the slowest and priciest call here by an order of magnitude.
   const runs = await Promise.all(
     placements.map(async (p): Promise<PlacementRun> => {
-      const attempts = await generateForPlacement(facts.facts, p, opts, factsContext, mode, archetype);
-      const job = await propJob;
+      const [attempts, frame] = await Promise.all([
+        generateForPlacement(facts.facts, p, opts, factsContext, mode, archetype),
+        mode === "creative" ? runCreativeScene(facts.facts, p, opts.propHint ?? "") : Promise.resolve(null),
+      ]);
 
-      // Prop findings attach to every attempt, because the prop is the same
-      // behind all of them. A BLOCK on the prop blocks the creative whatever
-      // the copy says, which is the point of scoring it at all.
+      // Frame findings attach to every attempt, because the same frame sits
+      // behind all of them. A BLOCK on the frame blocks the creative whatever
+      // the copy says, which is the point of scoring the picture at all.
+      //
+      // `packIsGenerated` rides along so the gate can refuse to let a
+      // model-rendered pack export without a human. That is the price of the
+      // invariant 5 exception, and it is charged here rather than left to a
+      // reviewer to remember.
       const withImage = attempts.map((a) => ({
         ...a,
-        score: mergeFindings(a.score, job?.findings ?? []),
+        score: mergeFindings(a.score, frame?.findings ?? []),
+        packIsGenerated: Boolean(frame?.scene),
       }));
 
       const chosen = chooseBest(withImage);
 
-      return { placement: p, attempts: withImage, chosen, decision: decide(withImage[chosen]) };
+      return {
+        placement: p,
+        attempts: withImage,
+        chosen,
+        decision: decide(withImage[chosen]),
+        scene: frame?.scene,
+        sceneError: frame?.error,
+        sceneAttempts: frame?.attempts,
+      };
     })
   );
-
-  const propOutcome = await propJob;
 
   return {
     facts: facts.facts,
@@ -119,8 +137,6 @@ export async function generateAd(url: string, opts: GenerationOptions = {}): Pro
     fallbackReason: facts.fallbackReason,
     mode,
     archetype,
-    prop: propOutcome?.prop,
-    propError: propOutcome?.error,
     placements: runs,
     summary: {
       total: runs.length,
@@ -165,32 +181,81 @@ async function generateForPlacement(
   return attempts;
 }
 
-interface PropJob {
-  prop?: PropResult;
+interface SceneJob {
+  scene?: SceneResult;
   findings: Finding[];
   error?: string;
+  /** Frames generated before one passed, or the cap. Surfaced, not hidden. */
+  attempts: number;
 }
 
-async function runCreativeProp(facts: ProductFacts, hint: string): Promise<PropJob> {
-  try {
-    const prop = await generateCreativeProp(facts, hint);
-    const scored = await scoreCreativeProp(prop);
+/**
+ * How many frames to generate before giving up on a placement.
+ *
+ * The label check is reliable and image models are not: on the first two live
+ * runs of this mode, both frames rendered a real ingredient name wrong, once
+ * as "acetyi glucosamine" and once as "mgtmarine". Rendering small print is
+ * simply where these models are weak, and rejecting a frame is worthless to a
+ * marketer if it just means the mode quietly produces nothing.
+ *
+ * So the rejection is looped, and capped, for the same reason the WARN loop is
+ * capped: a retry that has not worked twice is not going to work by being run
+ * ten more times, and each one is the priciest call in this pipeline.
+ *
+ * Note what is NOT looped. A frame rejected on a policy rule is not retried,
+ * exactly as a BLOCK on copy is not retried. Regenerating until the scorer
+ * stops objecting to a lab-coat scene is Goodharting the scorer; a mangled
+ * label is a rendering defect, and rerolling a rendering defect is just a
+ * retry.
+ */
+const MAX_SCENE_ATTEMPTS = 3;
 
-    // The model was told, twice, never to draw the product. Checked anyway:
-    // an instruction is not a control. If it drew one, the prop is discarded
-    // outright rather than shown with a warning, because a generated product
-    // container is the one thing invariant 5 exists to forbid.
-    if (scored.containsProduct) {
-      return {
-        findings: [],
-        error: "The generated prop appeared to contain a product container and was discarded.",
-      };
+async function runCreativeScene(facts: ProductFacts, p: Placement, hint: string): Promise<SceneJob> {
+  let lastError = "";
+
+  for (let attempt = 0; attempt < MAX_SCENE_ATTEMPTS; attempt++) {
+    try {
+      const scene = await generateCreativeScene(facts, p, hint);
+      const scored = await scoreCreativeScene(scene);
+
+      // A frame is discarded outright rather than shown with a warning. A
+      // reviewer skimming a thumbnail will catch a lab coat; nobody reliably
+      // catches a label whose concentration drifted by one character, and that
+      // is a false statement about a product on sale today.
+      if (scored.fabricatedText) {
+        lastError =
+          `The frame carried text that is not the pack's own, or pack text that looked invented. ` +
+          `${scored.fabricatedTextDetail}`.trim();
+        continue;
+      }
+
+      // The same question again, asked deterministically. The model above was
+      // told in as many words to report misspelled pack text and, on the first
+      // real frame this mode ever produced, said no while the pack read
+      // "acetyi glucosamine". So its transcription is checked in code against
+      // the product's own page rather than its opinion being trusted.
+      const corrupted = findCorruptedPackText(scored.packText, facts);
+      if (corrupted.length > 0) {
+        lastError =
+          "The frame misspelled text printed on the real product: " +
+          corrupted.map((c) => `"${c.rendered}" (the product says "${c.probably}")`).join(", ") +
+          ".";
+        continue;
+      }
+
+      return { scene, findings: scored.findings, attempts: attempt + 1 };
+    } catch (err) {
+      lastError = err instanceof Error ? err.message : String(err);
     }
-
-    return { prop, findings: scored.findings };
-  } catch (err) {
-    return { findings: [], error: err instanceof Error ? err.message : String(err) };
   }
+
+  return {
+    findings: [],
+    attempts: MAX_SCENE_ATTEMPTS,
+    error:
+      `No usable frame after ${MAX_SCENE_ATTEMPTS} attempts, so this placement fell back to the real ` +
+      `photograph. Last reason: ${lastError}`,
+  };
 }
 
 /**

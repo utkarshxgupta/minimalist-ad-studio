@@ -15,17 +15,16 @@ import type { AdCopy, Finding, ProductFacts, ScoreResult, Verdict } from "../lib
 import { scoreAd } from "../lib/scorer";
 import { avoidList, chooseBest, decide, shouldRetry, MAX_WARN_RETRIES, type Attempt } from "../lib/generator/gate";
 import { verifyClaimTrace, verifyStatBadge, verifyIngredientSynergy, clearUnusedFields, adText } from "../lib/generator/copy";
-import { sanitiseHint, buildPropPrompt } from "../lib/generator/creative";
+import { sanitiseHint, buildScenePrompt } from "../lib/generator/creative";
 import { PLACEMENT_LIST, fieldsFor, placement } from "../lib/generator/placements";
 import { canvasWordCount } from "../lib/generator/ad-text";
 import { tooWordyFor } from "../lib/generator/archetypes";
 import { isFlat, luminance } from "../lib/generator/hero-backdrop";
+import { findCorruptedPackText, editDistance } from "../lib/generator/pack-text";
 import {
   geometryFor,
   hasMargin,
   clearsStorySafeZone,
-  overlaps,
-  propAccentFor,
   MIN_MARGIN,
 } from "../lib/generator/artboard-geometry";
 
@@ -244,7 +243,7 @@ check("the scored text is exactly what the artboard shows", () => {
 
 // --- Creative-mode prop, layer 1 --------------------------------------------
 
-check("a hostile prop hint is stripped before it reaches an image model", () => {
+check("a hostile art direction hint is stripped before it reaches an image model", () => {
   const s = sanitiseHint("dewy glowing skin close up, before and after transformation, clinical lab");
   eq(s.hint.includes("skin"), false, "skin removed");
   eq(s.hint.includes("glowing"), false, "glow removed");
@@ -267,11 +266,50 @@ check("an innocent hint survives", () => {
   eq(s.hint, "warm afternoon light, a soft matte surface", "hint intact");
 });
 
-check("the prop prompt refuses to draw the product, repeatedly and explicitly", () => {
-  const p = buildPropPrompt(FACTS, "");
-  for (const forbidden of ["DO NOT depict", "no people", "no product", "bottle, tube, jar", "PURE WHITE"]) {
-    ok(p.includes(forbidden), `prompt should say "${forbidden}"`);
+check("the scene prompt forbids re-lettering the pack, at length", () => {
+  // The one thing this mode can do that photographic mode cannot is quietly
+  // change what a real product's label says. The prompt is not the control
+  // that stops it, the image scorer and the gate are, but a prompt that does
+  // not even ask is not a starting position worth defending.
+  const p = buildScenePrompt(FACTS, placement("meta_square_1x1"), "");
+  for (const required of [
+    "DO NOT invent, re-letter",
+    "concentration",
+    "softly out of focus rather than guessing",
+    "No people, no skin",
+    "certification mark or rosette",
+  ]) {
+    ok(p.includes(required), `prompt should say "${required}"`);
   }
+});
+
+check("the scene prompt asks for the copy's own space, per layout", () => {
+  // The frame and the type are composed against the same layout, so the model
+  // is told where the words land instead of being left to fill the frame and
+  // hope. A scene that puts visual incident under the headline produces copy
+  // sitting on clutter, which no amount of scrim fixes.
+  ok(buildScenePrompt(FACTS, placement("meta_square_1x1"), "").includes("LEFT half must stay"), "split");
+  ok(buildScenePrompt(FACTS, placement("meta_story_9x16"), "").includes("TOP THIRD must stay"), "tall");
+  ok(buildScenePrompt(FACTS, placement("pdp_listing_11x16"), "").includes("LOWER HALF must"), "stacked");
+});
+
+check("each placement gets a frame composed at its own aspect", () => {
+  for (const p of PLACEMENT_LIST) {
+    ok(buildScenePrompt(FACTS, p, "").includes(`Aspect ratio ${p.imageAspect}`), `${p.id} aspect`);
+  }
+});
+
+check("a generated pack can never export freely, however clean the copy", () => {
+  // The invariant 5 exception, charged at the gate. A model that redraws a
+  // real label can alter a concentration in a way that reads as normal, and
+  // there is no text check for a fact that only exists in pixels.
+  const clean = decide(attempt());
+  eq(clean.export, "free", "photographic mode with clean copy exports freely");
+
+  const generated = decide(attempt({ packIsGenerated: true }));
+  eq(generated.export, "override", "the same clean copy over a generated pack needs a human");
+  eq(generated.render, true, "it still renders: this is a sign-off, not a block");
+  ok(generated.reasons.some((r) => r.includes("rendered by an image model")), "and it says why");
 });
 
 // --- Claim grounding, creative-mode elements --------------------------------
@@ -436,20 +474,49 @@ check("a Story clears Instagram's own UI safe zones", () => {
   ok(clearsStorySafeZone(geo.copy), `copy box intrudes on the safe zone: ${JSON.stringify(geo.copy)}`);
 });
 
-check("the creative-mode prop never sits behind the product, on any layout", () => {
-  // Regression: the first version centred a large prop on the product box.
-  // On the split (square) layout, where the product fills up to 82 percent
-  // of the canvas, that put the prop's own graphic directly behind the
-  // opaque product photo. It rendered as nothing, because a prop hidden
-  // behind an opaque photo is invisible and only its blank white margin
-  // showed elsewhere, which multiplies away to nothing too. Caught by
-  // looking at an actual render, not by reasoning about the layout math.
-  for (const p of PLACEMENT_LIST) {
-    const product = geometryFor(p).product;
-    const prop = propAccentFor(p);
-    ok(!overlaps(product, prop), `${p.id}: prop ${JSON.stringify(prop)} overlaps product ${JSON.stringify(product)}`);
-    ok(hasMargin(prop, MIN_MARGIN), `${p.id}: prop box itself should clear the canvas edge too`);
-  }
+// --- Pack text on a generated frame -----------------------------------------
+
+check("a one-character corruption of a real ingredient name is caught", () => {
+  // The case that motivated this check. The first creative-mode frame this
+  // tool ever produced rendered "acetyi glucosamine" onto the label of a real
+  // product that says acetyl, and the vision model, asked directly whether any
+  // pack text looked misspelled, said no.
+  const facts: ProductFacts = { ...FACTS, rawText: `${FACTS.rawText}
+with matmarine + zinc + acetyl glucosamine` };
+  const problems = findCorruptedPackText(["FACE SERUM", "with matmarine + zinc", "+ acetyi glucosamine"], facts);
+  eq(problems.length, 1, "one corrupted word");
+  eq(problems[0].rendered, "acetyi", "the word as rendered");
+  eq(problems[0].probably, "acetyl", "what the product actually says");
+});
+
+check("the pack's real words are not flagged", () => {
+  // False positives matter more than recall here: a check that rejects good
+  // frames makes the mode unusable, and an unusable mode is not a control.
+  eq(
+    findCorruptedPackText(
+      ["Salicylic Acid 2%", "FACE SERUM", "for all skin types", "30ml / 1 fl oz", "Minimalist"],
+      FACTS
+    ),
+    [],
+    "a correct label passes"
+  );
+});
+
+check("a word the page never used is not a corruption of anything", () => {
+  // Absence from the page is not evidence of a typo. Only a near-miss is.
+  eq(findCorruptedPackText(["Ceramide Complex"], FACTS), [], "unrelated word, no near match");
+});
+
+check("short words are left alone", () => {
+  // At four characters an edit distance of one is a different word, not a
+  // typo, so "acid" against "acne" is not evidence of anything.
+  eq(findCorruptedPackText(["acne"], FACTS), [], "too short to judge");
+});
+
+check("edit distance stops early rather than scoring the whole string", () => {
+  eq(editDistance("acetyi", "acetyl", 1), 1, "one substitution");
+  eq(editDistance("niacinamide", "niacinamide", 1), 0, "identical");
+  ok(editDistance("niacinamide", "salicylic", 1) > 1, "unrelated words are past the bound");
 });
 
 // --- The photograph's own backdrop -------------------------------------------

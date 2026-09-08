@@ -28,6 +28,18 @@ export interface Attempt {
   ungrounded: ClaimTrace[];
   /** Copy fields over the 1080x1080 budget. */
   overLength: string[];
+  /**
+   * The pack in this creative was rendered by an image model from a reference
+   * photograph, rather than being the photograph. True only in creative mode.
+   *
+   * This is the deliberate exception to invariant 5, and this is where it gets
+   * paid for: an attempt carrying a generated pack can never export freely,
+   * however clean its copy is. A model that redraws a real product's label can
+   * alter a concentration or a claim in a way that reads as perfectly normal,
+   * and there is no text check for a fact that only exists in pixels. So a
+   * human signs for it, every time.
+   */
+  packIsGenerated?: boolean;
 }
 
 export interface GateDecision {
@@ -77,11 +89,18 @@ export function decide(attempt: Attempt): GateDecision {
   for (const o of overLength) {
     reasons.push(`Layout: ${o}`);
   }
+  if (attempt.packIsGenerated) {
+    reasons.push(
+      "The product pack in this creative was rendered by an image model from the real photograph, not " +
+        "photographed. Check the label, the concentration and any pack text against the real product before " +
+        "this ships."
+    );
+  }
 
   // Over-length copy is a layout problem, not a compliance one, so it does not
   // gate export. It is surfaced because a headline that overflows the artboard
   // is still a broken deliverable.
-  const needsOverride = score.verdict === "WARN" || ungrounded.length > 0;
+  const needsOverride = score.verdict === "WARN" || ungrounded.length > 0 || Boolean(attempt.packIsGenerated);
 
   return {
     render: true,
