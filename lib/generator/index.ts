@@ -2,6 +2,8 @@ import type { Dimension, Finding, ProductFacts, ScoreResult } from "@/lib/types"
 import { computeVerdict, dimensionScores, scoreAd } from "@/lib/scorer";
 import { generateCreativeScene, scoreCreativeScene, type SceneResult } from "./creative";
 import { findCorruptedPackText } from "./pack-text";
+import { readSceneTone } from "./scene-tone";
+import { geometryFor } from "./artboard-geometry";
 import { adText, generateCopy } from "./copy";
 import { getProductFacts, type FactsResult } from "./facts";
 import { avoidList, chooseBest, decide, shouldRetry, type Attempt, type GateDecision } from "./gate";
@@ -243,7 +245,24 @@ async function runCreativeScene(facts: ProductFacts, p: Placement, hint: string)
         continue;
       }
 
-      return { scene, findings: scored.findings, attempts: attempt + 1 };
+      // Did the frame actually leave the pale, quiet area the prompt asked for?
+      // The scene prompt requests it per placement and a request is not a
+      // control: a calm dark slab satisfies "calm and close to empty" and near
+      // black type is unreadable on it. Measured against the same copy box the
+      // artboard will typeset into, so the check and the render cannot drift.
+      const tone = await readSceneTone(scene.data, scene.mimeType, geometryFor(p).copy);
+      if (tone && !tone.ok) {
+        lastError = `The frame did not leave a usable area for the copy: ${tone.problems.join("; ")}.`;
+        continue;
+      }
+
+      return {
+        scene: tone
+          ? { ...scene, tone: { copyLuminance: tone.copy.luminance, copyContrast: tone.copy.contrast } }
+          : scene,
+        findings: scored.findings,
+        attempts: attempt + 1,
+      };
     } catch (err) {
       lastError = err instanceof Error ? err.message : String(err);
     }

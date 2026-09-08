@@ -7,7 +7,7 @@ import {
   geometryFor,
   scrimFor,
   needsWordmarkBand,
-  SCRIM_STRENGTH,
+  scrimStrengthFor,
   type Box,
 } from "@/lib/generator/artboard-geometry";
 import { sampleBackdrop, type HeroGround } from "@/lib/generator/hero-backdrop";
@@ -59,6 +59,11 @@ export interface ArtboardProps {
    * picture, so the packshot layer is not drawn on top of it.
    */
   sceneImage?: string;
+  /**
+   * How pale and quiet the generated frame's copy area measured. Absent means
+   * unmeasured, and the scrim falls back to covering the worst case.
+   */
+  sceneTone?: { copyLuminance: number; copyContrast: number };
   /** Preview width in CSS pixels. The captured node is always full size. */
   previewWidth?: number;
 }
@@ -131,7 +136,7 @@ function px(box: Box, W: number, H: number) {
 }
 
 export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artboard(
-  { copy, facts, placement, sceneImage, previewWidth = 380 },
+  { copy, facts, placement, sceneImage, sceneTone, previewWidth = 380 },
   ref
 ) {
   const { width: W, height: H, layout } = placement;
@@ -211,6 +216,8 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
   const copyPx = px(geo.copy, W, H);
 
   const scrim = scrimFor(geo, layout);
+  // Only as strong as this particular frame needs. See `scrimStrengthFor`.
+  const scrimStrength = scrimStrengthFor(sceneTone);
   const copyScrimPx = px(scrim.box, W, H);
   // The tall base comes down because `u` now carries the format's size: 74 was
   // compensating by hand for a unit that ignored height, and keeping both
@@ -339,7 +346,7 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
                 // Held flat across the whole copy region, then dropped. The
                 // stops come from `scrimFor`, so the fade can only ever start
                 // past the last word rather than through it.
-                background: `linear-gradient(${scrim.angle}deg, rgba(246,245,242,${SCRIM_STRENGTH}) 0%, rgba(246,245,242,${SCRIM_STRENGTH}) ${(scrim.hold * 100).toFixed(1)}%, rgba(246,245,242,0) 100%)`,
+                background: `linear-gradient(${scrim.angle}deg, rgba(246,245,242,${scrimStrength}) 0%, rgba(246,245,242,${scrimStrength}) ${(scrim.hold * 100).toFixed(1)}%, rgba(246,245,242,0) 100%)`,
               }}
             />
           )}
@@ -357,7 +364,7 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
                 width: "100%",
                 height: Math.round(H * 0.16),
                 zIndex: 1,
-                background: `linear-gradient(180deg, rgba(246,245,242,${SCRIM_STRENGTH}) 0%, rgba(246,245,242,0) 100%)`,
+                background: `linear-gradient(180deg, rgba(246,245,242,${scrimStrength}) 0%, rgba(246,245,242,0) 100%)`,
               }}
             />
           )}

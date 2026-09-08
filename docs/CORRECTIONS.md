@@ -712,3 +712,64 @@ that are not true, and its own failure mode was asserting something untrue with
 more authority than the doc it was checking. Worth remembering when a check
 disagrees with a human: the check is code, and code of this kind is usually
 younger and less reviewed than what it is checking.
+
+---
+
+## C-019: The frame was asked to leave room, but never asked what colour, and never checked
+
+**Claimed.** Creative mode reserves space for the type. `negativeSpaceFor`
+gives each layout its own instruction, per placement, and a test asserts the
+three differ.
+
+**Actual.** It asked for an area that was "calm and close to empty", which is a
+statement about composition and says nothing about value. A dark stone slab
+satisfies it perfectly and near-black type is unreadable on one. With no
+guarantee about tone and no measurement of what came back, the renderer's only
+defence was a scrim strong enough for the worst frame the model might return,
+applied to every frame including the ones that had handed over exactly the pale
+quiet surface asked for. That is why the generated scene came out washed flat:
+the scrim was insuring against a case nobody was checking for.
+
+Suggested by the user, who asked whether prompting for a light area per
+placement would work better. It does, but only with the second half attached.
+
+**Fix.** The instruction now states the value as a hard requirement, and names
+the top-left corner for the wordmark. `lib/generator/scene-tone.ts` then
+measures what actually arrived: the copy region and the wordmark corner are
+cropped from the returned frame and their mean brightness and brightness spread
+are read with sharp, against the same copy box the artboard typesets into, so
+check and render cannot drift. A frame that did not deliver is rejected and
+regenerated through the existing capped loop, exactly like a frame with a
+misspelled label.
+
+The payoff is `scrimStrengthFor`. With a measurement in hand the scrim is sized
+to the frame instead of to the worst case: a clean pale area gets 0.4 and keeps
+its photograph, a workable but textured one gets 0.68, an unmeasured frame
+still gets the old 0.92, because unmeasured is unknown rather than good.
+
+**Two things found while building it, both mine.**
+
+Sharp's `stats()` reads the image it was constructed with and ignores
+operations queued ahead of it, so `sharp(image).extract(box).stats()` returns
+statistics for the whole frame. The first version did that, and it was caught
+only because the copy region and the wordmark corner came back identical to the
+decimal, which two different crops of a photograph never are. It would
+otherwise have looked like a working check while measuring the wrong thing.
+
+And the relaxed thresholds were guessed at 210 brightness and 30 spread before
+any frame had been measured. Both real frames came in under 210, so the
+light-touch tier could never have fired: a threshold no observation can reach
+is not a conservative default, it is dead code wearing the costume of a policy.
+Recalibrated to 200 and 20 against measured frames, and the evidence is thin
+enough to say so in the source: two frames, a pale concrete ledge at 206/12 and
+a textured warm stone at 185/34.
+
+**What it says.** "Ask the model for X" and "verify you got X" are separate
+pieces of work, and this repo has now shipped the first without the second
+three times: the label the prompt forbade re-lettering, the CTA the spec put in
+a platform field, and now the reserved area. The instruction is the cheap half
+and it always feels finished.
+
+**Also worth noting**, because it cuts the other way: sharp is a real
+dependency now, declared in package.json rather than borrowed from Next's own
+tree, where a version bump could have removed it silently.

@@ -412,6 +412,7 @@ export default function GeneratePage() {
                     facts={run.facts}
                     placement={current.placement}
                     sceneImage={sceneImage}
+                    sceneTone={scene?.tone}
                     previewWidth={380}
                   />
                 ) : (

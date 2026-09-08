@@ -123,22 +123,44 @@ export async function fetchReferencePhoto(url: string): Promise<{ data: string; 
  * the frame the model composes and the frame the type lands on cannot drift.
  */
 function negativeSpaceFor(p: Placement): string {
+  // Tone, not just composition. The first version of this asked only for an
+  // area that was "calm and close to empty", which a dark stone slab satisfies
+  // perfectly, and near-black type is unreadable on one. The renderer's only
+  // remaining defence was a heavy light scrim, which had to be strong enough
+  // for the worst case and so washed out the scene on every frame including
+  // the ones that did not need it. Asking for the value as well as the
+  // emptiness is what lets that scrim come down.
+  const tone = `That reserved area must also be LIGHT: a pale, near-white or soft light
+neutral surface, evenly lit, low in contrast and free of hard shadows, dark
+objects or busy texture. Advertising copy is typeset over it in near-black
+afterwards and has to stay readable, so treat "pale and quiet" as a hard
+requirement of the composition rather than a stylistic preference.
+
+Keep the TOP-LEFT corner of the frame pale and clear as well, whatever else the
+composition does. The brand wordmark sits there.`;
+
   switch (p.layout) {
     case "split":
       return `Compose the product in the RIGHT half of the frame. The LEFT half must stay
 visually calm and close to empty: a plain surface or a soft field of colour,
 nothing detailed, because the headline and the body copy are typeset there
-afterwards.`;
+afterwards.
+
+${tone}`;
     case "tall":
       return `This is a vertical story frame. Compose the product in the LOWER-MIDDLE of
 the frame. The TOP THIRD must stay calm and close to empty, because the
 headline is typeset there afterwards, and keep the very bottom of the frame
-quiet too since the platform overlays its own interface there.`;
+quiet too since the platform overlays its own interface there.
+
+${tone}`;
     case "stacked":
     default:
       return `Compose the product in the UPPER portion of the frame. The LOWER HALF must
 stay visually calm and close to empty: a plain surface or a soft field of
-colour, because the headline and body copy are typeset there afterwards.`;
+colour, because the headline and body copy are typeset there afterwards.
+
+${tone}`;
   }
 }
 
@@ -220,6 +242,12 @@ may not argue anything the product's own page does not support.`;
 }
 
 export interface SceneResult {
+  /**
+   * How pale and how quiet the area under the copy actually came back, once
+   * measured. Carried through so the artboard can size its legibility scrim to
+   * the frame it actually got rather than to the worst frame it might get.
+   */
+  tone?: { copyLuminance: number; copyContrast: number };
   /** Base64 image data for a data: URI. A finished frame, rendered full-bleed. */
   data: string;
   mimeType: string;

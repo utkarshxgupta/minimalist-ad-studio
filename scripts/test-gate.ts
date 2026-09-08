@@ -30,7 +30,12 @@ import {
   MAX_PRODUCT_HEIGHT,
   scrimFor,
   needsWordmarkBand,
+  scrimStrengthFor,
+  SCRIM_STRENGTH,
+  SCRIM_STRENGTH_RELAXED,
+  SCRIM_STRENGTH_MEASURED,
 } from "../lib/generator/artboard-geometry";
+import { MIN_COPY_LUMINANCE, MAX_COPY_CONTRAST } from "../lib/generator/scene-tone";
 
 const FACTS: ProductFacts = {
   url: "https://beminimalist.co/products/salicylic-acid-2",
@@ -700,6 +705,40 @@ check("the wordmark gets a band exactly when the scrim leaves the top bare", () 
     const scrim = scrimFor(geometryFor(p), p.layout);
     eq(needsWordmarkBand(scrim), p.layout === "stacked", `${p.id} wordmark band`);
   }
+});
+
+// --- Sizing the scrim to the frame it actually got ---------------------------
+
+check("an unmeasured frame gets the full-strength scrim", () => {
+  // Absent a measurement the frame is unknown, not good. The strong default is
+  // what covers the worst thing the image model might return, which is what
+  // every frame used to get whether it needed it or not.
+  eq(scrimStrengthFor(undefined), SCRIM_STRENGTH, "no measurement");
+});
+
+check("a pale quiet frame gets a light touch, so the photograph survives", () => {
+  const clean = scrimStrengthFor({ copyLuminance: 238, copyContrast: 12 });
+  eq(clean, SCRIM_STRENGTH_RELAXED, "a genuinely clean reserved area");
+  ok(clean < SCRIM_STRENGTH, "and that is lighter than assuming the worst");
+});
+
+check("light but textured, or light but dim, still gets a real scrim", () => {
+  // Pale on average and busy underneath is the case an average hides: type
+  // across bright highlights and dark cracks is harder to read than type on a
+  // uniform mid-tone.
+  eq(scrimStrengthFor({ copyLuminance: 238, copyContrast: 45 }), SCRIM_STRENGTH_MEASURED, "busy");
+  eq(scrimStrengthFor({ copyLuminance: 185, copyContrast: 12 }), SCRIM_STRENGTH_MEASURED, "dimmer");
+});
+
+check("the scrim never relaxes below what a frame must clear to be accepted", () => {
+  // The relaxed tier has to sit strictly inside the accept thresholds, or a
+  // frame could be admitted at the boundary and then handed the lightest
+  // scrim, which is the one combination nobody checked.
+  const atThreshold = scrimStrengthFor({
+    copyLuminance: MIN_COPY_LUMINANCE,
+    copyContrast: MAX_COPY_CONTRAST,
+  });
+  eq(atThreshold, SCRIM_STRENGTH_MEASURED, "a barely-acceptable frame is not a clean one");
 });
 
 // --- Placements and the channel split --------------------------------------

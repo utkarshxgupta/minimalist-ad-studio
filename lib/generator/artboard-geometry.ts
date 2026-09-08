@@ -126,8 +126,61 @@ export function geometryFor(p: Placement): Geometry {
  */
 export const SCRIM_FADE = 0.12;
 
-/** Opacity the scrim holds across the whole copy region. */
+/**
+ * Opacity the scrim holds across the copy region when nothing is known about
+ * what is underneath it.
+ *
+ * Strong, because it has to cover the worst frame the image model might return.
+ */
 export const SCRIM_STRENGTH = 0.92;
+
+/**
+ * How pale and quiet a measured frame has to be before the scrim eases off.
+ *
+ * Comfortably above the threshold a frame must clear to be accepted at all:
+ * this is not "readable", it is "readable with room to spare", which is the
+ * bar for showing more of the photograph.
+ */
+/*
+ * Calibrated against measured frames rather than picked: the first values here
+ * were guessed at 210 and 30, and both real generated frames measured below
+ * 210, so the light-touch tier would never once have fired. A threshold no
+ * observation can reach is not a conservative default, it is dead code that
+ * looks like a policy.
+ *
+ * Evidence is thin and worth saying so: two frames. A pale concrete ledge
+ * measured 206 brightness at 12 spread, a textured warm stone 185 at 34. The
+ * first should keep its photograph, the second needs help, and these sit
+ * between them. Recalibrate when there are twenty frames rather than two.
+ */
+const SCRIM_RELAXED_LUMINANCE = 200;
+const SCRIM_RELAXED_CONTRAST = 20;
+
+/** Scrim opacity when the frame measured clean. Enough to lift type off texture, not enough to flatten the scene. */
+export const SCRIM_STRENGTH_RELAXED = 0.4;
+
+/** Scrim opacity when the frame is measurably light but not pristine. */
+export const SCRIM_STRENGTH_MEASURED = 0.68;
+
+/**
+ * The scrim only needs to be as strong as the frame under it is difficult.
+ *
+ * Before the generated frame's copy area was measured, this could not be
+ * known, so the scrim was sized for the worst case on every ad and washed out
+ * the scene on all of them, including the ones that had handed us a pale quiet
+ * surface exactly as asked. With a measurement in hand the common case gets a
+ * light touch and the photograph survives.
+ *
+ * Absent a measurement it returns the strong default. An unmeasured frame is
+ * not a good frame, it is an unknown one.
+ */
+export function scrimStrengthFor(tone?: { copyLuminance: number; copyContrast: number }): number {
+  if (!tone) return SCRIM_STRENGTH;
+  if (tone.copyLuminance >= SCRIM_RELAXED_LUMINANCE && tone.copyContrast <= SCRIM_RELAXED_CONTRAST) {
+    return SCRIM_STRENGTH_RELAXED;
+  }
+  return SCRIM_STRENGTH_MEASURED;
+}
 
 export interface Scrim {
   box: Box;
