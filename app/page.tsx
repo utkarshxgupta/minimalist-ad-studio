@@ -433,6 +433,39 @@ export default function GeneratePage() {
                   </span>
                 </div>
 
+                {/*
+                  Why the gate landed where it did, in its own words.
+
+                  `decide()` builds this list and the UI used to throw all of
+                  it away, showing only "Export requires a logged reason" and a
+                  textarea. On a clean creative-mode ad -- PASS verdict, no
+                  findings, one override for the model-rendered pack -- that
+                  left nothing on screen at all, and the marketer was asked to
+                  justify an override whose reason the tool would not tell
+                  them. For a project whose whole argument is that a reviewer
+                  can point at the rule, that was the worst possible thing to
+                  leave out.
+
+                  Findings appear again below in FindingList with their spans
+                  and fixes; the ones that only exist here are the reasons that
+                  cite no rule at all -- ungrounded claims, layout notes, an
+                  unrun dimension, a generated pack.
+                */}
+                {decision && decision.reasons.length > 0 && (
+                  <ul className="mt-3 space-y-1.5">
+                    {decision.reasons.map((r, i) => (
+                      <li
+                        key={i}
+                        className={`border-l-2 pl-3 text-sm ${
+                          decision.export === "blocked" ? "border-block" : "border-warn"
+                        } text-muted`}
+                      >
+                        {r}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
                 {decision?.export === "override" && (
                   <textarea
                     className="field mt-2"

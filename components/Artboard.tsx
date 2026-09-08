@@ -3,7 +3,13 @@
 import { forwardRef, useEffect, useRef, useState } from "react";
 import type { AdCopy, ProductFacts } from "@/lib/types";
 import type { Placement } from "@/lib/generator/placements";
-import { geometryFor, type Box } from "@/lib/generator/artboard-geometry";
+import {
+  geometryFor,
+  scrimFor,
+  needsWordmarkBand,
+  SCRIM_STRENGTH,
+  type Box,
+} from "@/lib/generator/artboard-geometry";
 import { sampleBackdrop, type HeroGround } from "@/lib/generator/hero-backdrop";
 import { backdropDividedDataUrl } from "@/lib/generator/cutout";
 
@@ -115,21 +121,6 @@ const AUDIENCE_FIELDS: { key: keyof AdCopy["audienceGrid"]; label: string }[] = 
   { key: "timing", label: "When" },
 ];
 
-/**
- * The copy box, extended to the canvas edges behind it.
- *
- * A scrim exactly the size of the text block looks like a pasted card. Bleeding
- * it to the edges the copy column already sits against, and fading it out on
- * the one edge facing the product, makes it read as part of the frame's own
- * light.
- */
-function scrimBox(copy: Box, layout: "split" | "stacked" | "tall"): Box {
-  const pad = 0.06;
-  if (layout === "split") return { x: 0, y: 0, w: Math.min(1, copy.x + copy.w + pad), h: 1 };
-  if (layout === "tall") return { x: 0, y: 0, w: 1, h: Math.min(1, copy.y + copy.h + pad) };
-  return { x: 0, y: Math.max(0, copy.y - pad), w: 1, h: 1 - Math.max(0, copy.y - pad) };
-}
-
 function px(box: Box, W: number, H: number) {
   return {
     left: Math.round(box.x * W),
@@ -210,9 +201,8 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
   const productPx = px(geo.product, W, H);
   const copyPx = px(geo.copy, W, H);
 
-  // The scrim is the copy box bled out to the canvas edges it already touches,
-  // so it reads as a field the type sits on rather than a floating panel.
-  const copyScrimPx = px(scrimBox(geo.copy, layout), W, H);
+  const scrim = scrimFor(geo, layout);
+  const copyScrimPx = px(scrim.box, W, H);
   const headlineSize = Math.round((layout === "tall" ? 74 : 56) * u);
 
   // On a tall format the copy column sits above the product, so a footnote
@@ -294,6 +284,13 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
               fontSize: Math.round(30 * u),
               letterSpacing: "-0.01em",
               fontWeight: 700,
+              // Above the scene. Without this the wordmark is `position:
+              // absolute` with no z-index, sitting first in the DOM, so the
+              // full-bleed generated frame at z-index 0 paints straight over
+              // it: creative mode was producing ads with no brand mark on them
+              // at all. Photographic mode never showed the bug because it has
+              // no scene layer to be buried under.
+              zIndex: 3,
               ...nowrap,
             }}
           >
@@ -327,10 +324,28 @@ export const Artboard = forwardRef<HTMLDivElement, ArtboardProps>(function Artbo
                 position: "absolute",
                 ...copyScrimPx,
                 zIndex: 1,
-                background:
-                  layout === "split"
-                    ? "linear-gradient(90deg, rgba(246,245,242,0.94) 0%, rgba(246,245,242,0.86) 62%, rgba(246,245,242,0) 100%)"
-                    : "linear-gradient(0deg, rgba(246,245,242,0.94) 0%, rgba(246,245,242,0.86) 62%, rgba(246,245,242,0) 100%)",
+                // Held flat across the whole copy region, then dropped. The
+                // stops come from `scrimFor`, so the fade can only ever start
+                // past the last word rather than through it.
+                background: `linear-gradient(${scrim.angle}deg, rgba(246,245,242,${SCRIM_STRENGTH}) 0%, rgba(246,245,242,${SCRIM_STRENGTH}) ${(scrim.hold * 100).toFixed(1)}%, rgba(246,245,242,0) 100%)`,
+              }}
+            />
+          )}
+
+          {sceneImage && needsWordmarkBand(scrim) && (
+            // The stacked layouts put the product at the top and the copy at
+            // the bottom, so the main scrim starts below the product and the
+            // wordmark is left sitting on bare photograph. Measured at zero
+            // opacity behind it, which is exactly as legible as it sounds.
+            <div
+              style={{
+                position: "absolute",
+                left: 0,
+                top: 0,
+                width: "100%",
+                height: Math.round(H * 0.16),
+                zIndex: 1,
+                background: `linear-gradient(180deg, rgba(246,245,242,${SCRIM_STRENGTH}) 0%, rgba(246,245,242,0) 100%)`,
               }}
             />
           )}

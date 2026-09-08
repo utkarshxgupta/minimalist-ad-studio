@@ -28,6 +28,8 @@ import {
   clearsStorySafeZone,
   MIN_MARGIN,
   MAX_PRODUCT_HEIGHT,
+  scrimFor,
+  needsWordmarkBand,
 } from "../lib/generator/artboard-geometry";
 
 const FACTS: ProductFacts = {
@@ -644,6 +646,60 @@ check("a dark backdrop is refused, because the ink on top of it is near-black", 
   // brand canvas wins whenever adopting the photo's ground would cost legibility.
   ok(luminance(229, 233, 234) > 0.72, "the real studio backdrop is adopted");
   ok(luminance(24, 22, 20) < 0.72, "a near-black ground is refused");
+});
+
+// --- The legibility scrim on a generated frame -------------------------------
+
+check("the scrim covers every word of the copy, on every layout", () => {
+  // The defect this replaces: the gradient's opaque end was pinned to the
+  // scrim box's edge while the copy sat at the other end, so the fade ran
+  // across the text. Measured before the fix, the headline sat on 0.25
+  // opacity on the stacked layouts and the line ends on 0.24 on the square.
+  for (const p of PLACEMENT_LIST) {
+    const geo = geometryFor(p);
+    const scrim = scrimFor(geo, p.layout);
+    const b = scrim.box;
+    ok(
+      geo.copy.x >= b.x - 1e-9 &&
+        geo.copy.y >= b.y - 1e-9 &&
+        geo.copy.x + geo.copy.w <= b.x + b.w + 1e-9 &&
+        geo.copy.y + geo.copy.h <= b.y + b.h + 1e-9,
+      `${p.id}: copy ${JSON.stringify(geo.copy)} is not inside scrim ${JSON.stringify(b)}`
+    );
+  }
+});
+
+check("the scrim holds full strength until past the last word", () => {
+  // `hold` is the fraction along the gradient where the falloff may begin. It
+  // has to sit at or beyond the copy's far edge, measured along whichever axis
+  // that layout fades on, or some of the copy is in the fade.
+  for (const p of PLACEMENT_LIST) {
+    const geo = geometryFor(p);
+    const scrim = scrimFor(geo, p.layout);
+
+    const copyEdge =
+      p.layout === "split"
+        ? (geo.copy.x + geo.copy.w) / scrim.box.w
+        : p.layout === "tall"
+          ? (geo.copy.y + geo.copy.h) / scrim.box.h
+          : (1 - geo.copy.y) / scrim.box.h;
+
+    ok(
+      scrim.hold >= copyEdge - 1e-9,
+      `${p.id}: scrim fades from ${scrim.hold.toFixed(2)} but copy runs to ${copyEdge.toFixed(2)}`
+    );
+    ok(scrim.hold < 1, `${p.id}: a scrim that never fades is a panel, not a scrim`);
+  }
+});
+
+check("the wordmark gets a band exactly when the scrim leaves the top bare", () => {
+  // Stacked layouts put the product at the top, so their scrim starts below it
+  // and the wordmark sits on bare photograph: measured at zero opacity behind
+  // it. Split and tall scrims already reach the top corner.
+  for (const p of PLACEMENT_LIST) {
+    const scrim = scrimFor(geometryFor(p), p.layout);
+    eq(needsWordmarkBand(scrim), p.layout === "stacked", `${p.id} wordmark band`);
+  }
 });
 
 // --- Placements and the channel split --------------------------------------

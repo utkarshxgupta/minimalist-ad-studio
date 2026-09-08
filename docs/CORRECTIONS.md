@@ -620,3 +620,58 @@ progressively smaller ones, which is noise, not signal. The cost is somewhere
 in rasterising the artboard through an SVG foreignObject and it predates all of
 this. The real fix is server-side rendering in headless Chrome, which was
 identified early in this project and still has not been built.
+
+---
+
+## C-017: The scrim faded across the copy, the wordmark was painted over, and the override reason was computed and discarded
+
+**Claimed.** Creative mode composites the copy over the generated frame with a
+legibility scrim, and the gate makes a human sign for a model-rendered pack.
+Both were reported working after a visual check on one composite.
+
+**Actual.** Three defects, all reported by the user against a real generated
+ad, all present since creative mode shipped.
+
+*The scrim faded across the text it existed to protect.* The gradient's opaque
+end was pinned to the scrim box's own edge, and the copy sits at the far end of
+that box on two of the three layouts, so the falloff ran through the words
+rather than past them. Measured rather than eyeballed: the headline sat on 0.25
+opacity on the stacked layouts, the wordmark on 0.00, and on the square the
+line ends faded to 0.24. It looked fine in the one composite it was checked
+against because that was the split layout, the single case where the copy
+happens to sit at the opaque end.
+
+*The wordmark was invisible in creative mode entirely.* It is `position:
+absolute` with no z-index and sits first in the DOM; the full-bleed scene layer
+is z-index 0 and comes later, so it painted straight over the brand mark. Every
+creative-mode ad this tool has produced carried no wordmark at all.
+Photographic mode never showed it, having no scene layer to be buried under.
+
+*The override reason was computed and thrown away.* `decide()` builds six kinds
+of reason and `app/page.tsx` rendered none of them: `grep -c reasons` returned
+0. The UI said "Export requires a logged reason" and gave the marketer a
+textarea. On a clean creative-mode ad, PASS verdict and no findings, the single
+reason is the model-rendered pack, and it appeared nowhere on screen. The
+marketer was asked to justify an override whose reason the tool would not tell
+them, in a project whose entire argument is that a reviewer can point at the
+rule.
+
+**Fix.** `scrimFor` in artboard-geometry.ts derives the gradient from the copy
+box, holding full strength from the opaque edge all the way to the copy's far
+edge and only then falling away, so no part of the copy can sit in the falloff
+on any layout. `needsWordmarkBand` adds a top band where the scrim leaves the
+corner bare. The wordmark is lifted above the scene. The gate's reasons render
+as a list above the override textarea. Three tests assert the copy is inside
+the scrim, that the hold point clears the copy's far edge, and that the band
+appears exactly on the layouts that need it.
+
+**What it says.** The scrim was checked once, on one layout, by looking. Two
+layouts out of three were broken and the arithmetic would have said so in
+seconds. This is the fourth correction in this project caused by verifying a
+layout with an eye rather than a number, and the fix is the same one that
+worked every previous time: put the geometry in a module the tests can read.
+
+The discarded reasons are a different failure and a worse one. Nothing was
+wrong with the gate; it did its job and the interface silently dropped the
+result. Worth stating plainly: a control whose output nobody renders is not a
+control, it is a computation.

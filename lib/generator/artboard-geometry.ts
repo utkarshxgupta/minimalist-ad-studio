@@ -111,6 +111,74 @@ export function geometryFor(p: Placement): Geometry {
 }
 
 
+/**
+ * How far past the copy the scrim keeps fading, as a fraction of the canvas.
+ *
+ * The scrim has to be at full strength everywhere the copy sits and reach zero
+ * before the product, and it needs room in between or the falloff reads as a
+ * hard-edged panel pasted over the photograph.
+ */
+export const SCRIM_FADE = 0.18;
+
+/** Opacity the scrim holds across the whole copy region. */
+export const SCRIM_STRENGTH = 0.92;
+
+export interface Scrim {
+  box: Box;
+  /** CSS gradient angle, pointing from the opaque end toward the transparent end. */
+  angle: number;
+  /** Fraction along that axis where the copy ends. Opacity holds until here, then falls to zero. */
+  hold: number;
+}
+
+/**
+ * The legibility scrim for a creative-mode frame, anchored to where the copy
+ * actually is.
+ *
+ * The first version pinned the gradient's opaque end to the scrim box's own
+ * edge and let it fade across the box. On the split layout the copy sits at
+ * the opaque end and that happened to work, which is why it looked fine on the
+ * one composite it was checked against. On the stacked layouts the copy sits
+ * at the far end, so the headline landed on 0.25 opacity and the wordmark on
+ * nothing at all: the fade ran across the text instead of past it. Measured,
+ * not guessed, and it is why type over a generated frame was unreadable.
+ *
+ * `hold` is what fixes it. Opacity is held flat from the opaque edge all the
+ * way to the copy's far edge, and only then falls away, so no part of the copy
+ * can sit in the falloff regardless of which end of the canvas it is on.
+ */
+export function scrimFor(geo: Geometry, layout: Placement["layout"]): Scrim {
+  const copy = geo.copy;
+
+  if (layout === "split") {
+    // Copy on the left, product on the right: opaque at the left edge.
+    const box: Box = { x: 0, y: 0, w: Math.min(1, copy.x + copy.w + SCRIM_FADE), h: 1 };
+    return { box, angle: 90, hold: (copy.x + copy.w) / box.w };
+  }
+
+  if (layout === "tall") {
+    // Copy above the product: opaque at the top edge.
+    const box: Box = { x: 0, y: 0, w: 1, h: Math.min(1, copy.y + copy.h + SCRIM_FADE) };
+    return { box, angle: 180, hold: (copy.y + copy.h) / box.h };
+  }
+
+  // Stacked: product above, copy below, so the scrim is opaque at the bottom.
+  const top = Math.max(0, copy.y - SCRIM_FADE);
+  const box: Box = { x: 0, y: top, w: 1, h: 1 - top };
+  return { box, angle: 0, hold: (1 - copy.y) / box.h };
+}
+
+/**
+ * True when the scrim leaves the top of the canvas bare, so the wordmark needs
+ * a band of its own.
+ *
+ * Only the stacked layouts do: their scrim starts below the product, and the
+ * wordmark sits in the top corner over whatever the generated scene put there.
+ */
+export function needsWordmarkBand(scrim: Scrim): boolean {
+  return scrim.box.y > 0;
+}
+
 /** True if two fractional boxes overlap at all. */
 export function overlaps(a: Box, b: Box): boolean {
   return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
