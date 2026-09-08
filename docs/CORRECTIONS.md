@@ -685,8 +685,15 @@ docs actually exists, so a correction that cites a file cannot quietly rot.
 
 **Actual.** Its path pattern listed extensions as `md|ts|tsx|mjs|...`.
 Alternation is first-match-wins, so `app/page.tsx` matched `.ts`, stopped, and
-the checker went looking for `app/page.ts`. It then reported that file as
-missing, which it was, because the checker had just made it up.
+the checker went looking for a `page.ts` in that directory. It then reported
+that file as missing, which it was, because the checker had just made it up.
+
+Then it happened again, in this entry. The first draft of the paragraph above
+wrote the invented path out in full, the checker read it as a citation, and the
+correction describing the bug failed the same check for the same reason. The
+path is written without its directory now, since the pattern requires a slash.
+A checker that cannot tell a citation from a quotation of a wrong citation is
+a real limit, and the cheap answer is not to write the wrong path down.
 
 The bug sat latent for the life of the project: no doc had cited a `.tsx` file
 until C-017 did. The first correct citation of a component was the thing that
