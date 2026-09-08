@@ -1,156 +1,108 @@
 # Known limitations
 
-The full register. `docs/FAILURE-MODES.md` carries the three that would actually
-cost money in production, which is what the deliverable asks for; these are the
-rest, kept because a tool that judges other people's claims should be able to
-state the limits of its own.
-
-Numbering is the original numbering, so references from `docs/CORRECTIONS.md`
-and the rulebook still resolve. Items 1, 3, 4, 9 and 10 were promoted into
-`docs/FAILURE-MODES.md` and are not repeated here.
+Everything else this system is weak at. The three that would actually cost money
+in production are in `docs/FAILURE-MODES.md`; these are the rest, written down
+because a tool that judges other people's claims should be able to state the
+limits of its own.
 
 ---
 
-## 2. Two load-bearing citations are secondary
+## 1. Two load-bearing citations rest on secondary sources
 
-Cosmetics Rules 2020 Rule 36 and the CDSCO notice of 18 May 2026 rest on
-secondary publishers, because the government hosts refused automated retrieval
-(HTTP 403 and a TLS failure). Both are flagged `source_confidence: secondary` in
-the rulebook and listed in `docs/CORRECTIONS.md` C-004.
+Cosmetics Rules 2020 Rule 36 and the CDSCO notice of 18 May 2026 were read
+through secondary publishers, because the government hosts refused automated
+retrieval (HTTP 403 and a TLS failure). Both are flagged
+`source_confidence: secondary` in the rulebook.
 
-They are the anchor for `POLICY-001`, the single most-used BLOCK rule. If the
-secondary text is wrong, the rule is wrong.
+They anchor `POLICY-001`, the most-used BLOCK rule. If the secondary text
+misstates the clause, the rule built on it is wrong. Every other regulatory
+citation was read in primary text.
 
----
-
----
-
-## 5. Layer 2 is not reproducible
+## 2. Layer 2 is not reproducible
 
 Layer 1 reruns identically forever. Layer 2 is a model, and the same ad can
 score differently between runs. Every finding is tagged with the layer that
 produced it so a reviewer knows which kind they are reading, but a WARN that
-appears on Tuesday and not on Wednesday will still erode trust.
+appears on Tuesday and not on Wednesday still erodes trust.
 
 **Partly mitigated.** Temperature is 0, severity comes from the rulebook rather
-than the model, and rules with a matcher are checked by layer 1 first with layer
-1 winning on overlap.
+than from the model, and any rule with a deterministic matcher is decided by
+layer 1, which wins on overlap.
 
----
+## 3. Extraction is coupled to one storefront theme
 
----
-
-## 6. Extraction is coupled to one storefront theme
-
-`ProductFacts` is read from the DOM structure the Shopify theme currently
-renders: `h1.product__title`, `span.product__subtitle`, `toggle-tab`. A theme
-change breaks the selectors.
+`ProductFacts` is read from the DOM the Shopify theme currently renders:
+`h1.product__title`, `span.product__subtitle`, `toggle-tab`. A theme change
+breaks the selectors.
 
 **How it fails.** Loudly for the product name, which is checked and falls back to
-a committed snapshot. Quietly for benefits and concentrations, which would come
-back empty and produce a warning the marketer has to read. A generated ad with
-fewer facts behind it is a more constrained ad, not a wrong one, so this
-degrades in the safe direction. It is still a maintenance burden, and it is the
-reason `npm run test:extract` runs against committed page fixtures.
+a committed snapshot. Quietly for benefits and concentrations, which come back
+empty and produce a warning the marketer has to read. An ad generated from fewer
+facts is a more constrained ad rather than a wrong one, so this degrades in the
+safe direction. It is still a maintenance burden, and it is why
+`npm run test:extract` runs against committed page fixtures.
 
----
+## 4. The claim trace can be escaped by omission
 
----
-
-## 7. The claim trace can be escaped by omission
-
-The generator declares which facts support which claims, and the declaration is
-verified in code. A model escapes this by simply not declaring a claim.
+The generator declares which facts support which claims, and that declaration is
+verified in code. A model escapes it by simply not declaring a claim.
 
 **What closes it.** The scorer runs over the finished copy with the same facts
 attached and does not care what the generator declared. The trace catches the
 confident mistake; the scorer catches the convenient omission. Neither alone is
 sufficient, which is why both run.
 
-**What is still open.** The rulebook enforces invariant 4 only for
+**What is still open.** The rulebook enforces the grounding invariant only for
 concentrations, via `POLICY-005`. There is no rule for a benefit claim absent
-from `ProductFacts`, so an ungrounded benefit is surfaced as a generation
-warning that costs an override, not as a rule violation. That gap is real and is
-recorded in `docs/DESIGN.md` rather than closed, because adding a rule is a human
-decision and the eval has to be run either side of it.
+from `ProductFacts`, so an ungrounded benefit surfaces as a generation warning
+that costs an override rather than as a rule violation. Closing that gap means
+adding a rule, which is a human decision that needs the eval run either side of
+it.
 
----
-
----
-
-## 8. Image findings have no span verification
+## 5. Image findings have no span verification
 
 The anti-hallucination guarantee for text is that a model must quote the exact
 substring it objects to, verified in code. An image has no substring. Image
 findings carry a description instead and are tagged `target: "image"` so a
-reviewer weights them differently, but the guarantee genuinely does not hold
-there.
+reviewer can weight them differently, but the guarantee does not hold there.
 
-The deny-list that runs over the marketer's style hint before generation is a
-word list, so a paraphrase gets through it. It is a cheap filter in front of an
-expensive call, not a control.
+The deny-list that screens the marketer's art-direction hint before an image
+model is called is a word list, so a paraphrase passes it. It is a cheap filter
+in front of an expensive call, not a control.
 
----
+## 6. The layout checks are geometric, not visual
 
----
+Box positions live in `lib/generator/artboard-geometry.ts` as data that both the
+renderer and the tests read, so the two cannot silently disagree. Asserted on
+every placement: the product clears the canvas edge, the product never exceeds
+65 percent of canvas height, the copy column stays in bounds, a Story clears
+Instagram's own UI safe zones, and the legibility scrim covers the whole copy
+region before it fades. On a generated frame, `lib/generator/scene-tone.ts`
+additionally measures whether the area under the copy is pale and quiet enough
+to take near-black type, and rejects frames that are not.
 
-## 8b. Creative mode's compositing has no rendered-layout check
+**What none of that covers.** These assert rectangles and pixel statistics, not
+"this looks good". Text overflow within its box, whether a webfont actually
+loaded before an export was captured, and the contrast of copy against the exact
+pixels behind it are unchecked. A layout can satisfy every assertion here and
+still be an ugly composition. The checks catch wrong; they do not catch
+mediocre.
 
-Everything the deterministic scorer verifies is verified against the text or
-the pixels of a generated image. Nothing verifies that the *composed* creative
-is legible: that the product is inside the frame, that a caption clears a
-platform's own safe zones, that a decorative prop does not end up hidden
-behind an opaque photo.
+## 7. The override log lives in one browser
 
-That last one happened. The first version of the creative-mode prop was sized
-and centred on the product's own bounding box, on the theory that it would
-read as a motif surrounding the bottle. On the square placement, where the
-product box fills up to 82 percent of the canvas, that put the prop's actual
-graphic content directly behind the opaque product photo: invisible, because
-a decoration behind an opaque photo is invisible, and only the prop's own
-blank white margin showed elsewhere, which multiplies away to nothing against
-a light canvas. It shipped, passed every existing test, and rendered as an
-empty flat panel. Caught by looking at the actual output, not by reasoning
-about the position math, in response to a direct report that the generated
-images did not look publication-ready.
+WARN and creative-mode exports require a logged reason, and that log is
+`localStorage`. It is per-browser, and the interface says so. Production would
+write to the review system.
 
-**What now exists.** `lib/generator/artboard-geometry.ts` is the one place
-box positions are computed, imported by both the component that renders them
-and the tests that check them, so the two cannot silently disagree. It is
-checked for: the product never touching the canvas edge, the copy column
-staying in bounds, a Story clearing Instagram's own UI safe zones, and the
-prop accent never overlapping the product box, on every placement.
+A durable-looking audit trail that silently loses entries would be worse than an
+obviously local one, because people would rely on it.
 
-**What this still does not cover.** The checks are geometric, not visual: they
-assert non-overlapping rectangles, not "this looks good." A layout could pass
-every one of these and still be an ugly composition. Font rendering, text
-overflow within a box, and colour contrast between the copy and whatever sits
-behind it are unchecked. The gate this session added catches wrong; it does
-not yet catch merely mediocre.
-
----
-
----
-
-## 11. The override log lives in one browser
-
-WARN exports require a logged reason, and the log is `localStorage`. It is
-per-browser and it is labelled as such in the interface. Production writes to
-the review system.
-
-A durable-looking audit trail that silently loses entries would be worse than
-this, because people would rely on it.
-
----
-
----
-
-## 12. Operational
+## 8. Operational
 
 - **Quota exhaustion fails closed.** If the policy call fails after a retry, the
   verdict is forced to BLOCK. Correct, and indistinguishable from a broken
-  scorer unless the reason is surfaced, which is why it is. This cost an hour
-  once already.
-- **One placement.** 1080x1080 only. Each additional placement changes the copy
-  budget and therefore the claim surface.
+  scorer unless the reason is surfaced, which is why it is surfaced.
+- **Four placements, one brand.** Each placement changes the copy budget and
+  therefore the claim surface, so each is written and scored separately rather
+  than rescaled. Adding a fifth is not free.
 - **No auth, no persistence, no multi-tenancy.** Prototype scope.

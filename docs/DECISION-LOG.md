@@ -1,8 +1,7 @@
 # Decision log
 
-The long-form record: every decision that mattered, with the alternatives
-rejected and why. The one-page deliverable is `docs/DECISIONS.md`; this is what
-sits behind it, kept because the reasoning is the part worth reading.
+Every decision that shaped this build, with the alternative that was rejected
+and the reason. `docs/DECISIONS.md` is the summary; this is the reasoning.
 
 ---
 
@@ -371,49 +370,43 @@ a regex, and to add the attack to the eval set as a regression row.
 The attacker and the scorer are the same model family, so their blind spots
 correlate. **This measures gameability, not safety.**
 
-**Corrections.** Eight logged in `docs/CORRECTIONS.md`, including two regulatory
-citations that were confidently wrong before verification, a substantiation claim
-filed against the wrong product, and two compositing defects reported by the user
-after this session's own review had called the same code correct: a product photo
-cropped out of frame, a generated backdrop that produced a visible seam, and a
-badge that wrapped in the export but not the preview. A follow-up fix for the
-first repeated the pattern at smaller scale, self-caught this time: a prop graphic
-placed behind the opaque product photo, invisible, verified only by re-looking at
-the actual render rather than trusting the previous fix's own test suite. A tool that judges other people's
-claims should be able to show its own error rate.
+**Corrections.** 19 logged in `docs/CORRECTIONS.md`: two regulatory citations
+confidently wrong before verification, a substantiation study filed against the
+wrong product, a product photo cropped out of frame, a legibility scrim that
+faded across the text it existed to protect. Several were found only after a
+claim of correctness had already been made about the same code. A tool that
+judges other people's claims should be able to show its own error rate.
 
-Twelve known weaknesses are written down in `docs/FAILURE-MODES.md`. The one
-worth reading first: `ProductFacts` is the brand's own page copy, so where the
-page overclaims, grounded generation reproduces the overclaim. A PASS means
+The limits are in `docs/FAILURE-MODES.md` and `docs/KNOWN-LIMITATIONS.md`. The
+one worth reading first: `ProductFacts` is the brand's own page copy, so where
+the page overclaims, grounded generation reproduces the overclaim. A PASS means
 "consistent with the product page", not "certainly lawful".
 
 ---
 
 ## What I would do next, in order
 
-1. **Extend the geometry checks from layout to legibility.** The tests added
-   this session assert non-overlapping rectangles; they do not assert that text
-   fits its box, that contrast holds against whatever sits behind it, or that a
-   font actually loaded before an export was taken. Two real defects shipped
-   because nothing checked geometry at all; the geometry checks that exist now
-   are a first pass, not a complete one.
-2. **Build the creative archetypes.** An external audit of the brand's asset
-   library identified ten recurring creative structures. This repo has three
-   layout families plus creative mode's checklist and stat badge. That is
-   still the largest single gap between what it produces and what the brand
-   actually ships.
-3. **Get 50 real ads from the brand's archive.** The tone and language rules were
-   derived from product pages because ad copy could not be obtained. Those are
-   different registers, and a rulebook built on the wrong one is systematically
-   lenient about the exact failure it exists to catch.
-4. **Close the grounding gap in the standard.** Invariant 4 is enforced by rule
-   only for concentrations. A benefit claim absent from `ProductFacts` is
-   currently a generation warning, not a finding. That rule should exist, and
-   adding it needs the eval run either side.
-5. **Give the registry an owner.** `standard/claims-registry.yaml` is populated
-   from what product pages state, not from study reports. Until whoever holds the
-   studies owns it, POLICY-012 will produce false positives on real claims.
-6. **Image input on the review surface.** Real ads are pictures, and the tool
-   currently reads text.
-7. **An independent red team.** A different model family, so the blind spots stop
-   correlating.
+1. **Get 50 real ads from the brand's archive.** The tone and language rules
+   were derived from product pages because ad copy could not be obtained. Those
+   are different registers, and a rulebook built on the wrong one is
+   systematically lenient about the exact failure it exists to catch. This is
+   the largest gap in the standard and it is a data problem, not a code one.
+2. **Close the grounding gap in the standard.** The grounding invariant is
+   enforced by rule only for concentrations. A benefit claim absent from
+   `ProductFacts` is currently a generation warning, not a finding. That rule
+   should exist, and adding it needs the eval run either side.
+3. **Give the substantiation registry an owner.**
+   `standard/claims-registry.yaml` is populated from what product pages state,
+   not from study reports. Until whoever holds the studies owns it, POLICY-012
+   answers "did the brand publish this claim" rather than "is it substantiated".
+4. **Extend the layout checks from geometry to legibility.** What exists asserts
+   rectangles and pixel statistics. It does not assert that text fits its box,
+   that a webfont loaded before an export was captured, or that contrast holds
+   against the exact pixels behind the copy.
+5. **Image input on the review surface.** Real ads are pictures, and the review
+   surface currently reads text.
+6. **An independent red team.** A different model family, so the blind spots
+   stop correlating with the scorer's.
+7. **The remaining creative archetypes.** Four of the ten structures observed in
+   the brand's asset library are built. The other six are variations on those
+   rather than new grounding problems, which is why they rank last.

@@ -163,7 +163,7 @@ standard/          the product: rules, sources, substantiation registry
 lib/scorer/        two-layer scorer, prompts assembled from standard/
 lib/generator/     fetch, extract, copy, background, gate, placements
 eval/dataset.jsonl 29 labelled ads, including hard negatives
-docs/              decisions, failure modes, design record, corrections
+docs/              decisions, failure modes, rule derivation, corrections
 fixtures/          committed product snapshots and parser fixtures
 ```
 
@@ -180,15 +180,20 @@ The two deliverable documents:
 
 Behind them, kept because the reasoning is the part worth reading:
 
+- [`docs/RULE-DERIVATION.md`](docs/RULE-DERIVATION.md), how each rule was
+  arrived at: what the corpus or the regulation actually supported, what
+  severity was argued both ways, and which candidates were cut for lacking
+  evidence.
 - [`docs/DECISION-LOG.md`](docs/DECISION-LOG.md), every decision in long form
   with the alternatives rejected.
 - [`docs/KNOWN-LIMITATIONS.md`](docs/KNOWN-LIMITATIONS.md), the fuller register
   of everything else known to be weak.
-- [`docs/CORRECTIONS.md`](docs/CORRECTIONS.md), where this agent was wrong and
-  how it was caught: two regulatory citations confidently wrong before
-  verification, a study filed against the wrong product, a scrim that faded
-  across the text it existed to protect. A tool that judges other people's
-  claims should be able to show its own error rate.
+- [`docs/CORRECTIONS.md`](docs/CORRECTIONS.md), every claim in this build that
+  turned out to be false, how it was caught and what changed: two regulatory
+  citations confidently wrong before verification, a study filed against the
+  wrong product, a legibility scrim that faded across the text it existed to
+  protect. A tool that judges other people's claims should be able to show its
+  own error rate.
 
 Commits are the working record and are not squashed. The raw agent session
 transcripts run to 64MB of mostly base64 image data, so they are submitted

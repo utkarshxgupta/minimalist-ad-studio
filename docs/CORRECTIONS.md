@@ -183,7 +183,7 @@ example teaches the wrong thing.
 
 ## C-007: Exported creatives were not publication-ready, on the exact claim I had verified
 
-**Claimed.** The composited artboard had been checked: earlier in this session
+**Claimed.** The composited artboard had been checked: shortly beforehand
 a live browser run showed a product photo cleanly contained on a flat backdrop,
 and I reported the seam bug from an earlier iteration fixed.
 
@@ -227,7 +227,7 @@ dimensions, flat colour temperature across the whole frame, pill on one line.
 
 **What it says about verification in this project.** I had a real check
 (colour-temperature sampling, CDP export decoding) available and had used it
-successfully once already this session, and still reported the compositing
+successfully once already, and still reported the compositing
 fixed on visual impression alone at the next opportunity. The check existing
 in the toolbox is not the same as running it every time the claim is "this
 looks right."
@@ -278,7 +278,7 @@ carry it.
 
 **Actual.** The count was assembled from a hand-written list of four field
 names: headline, subhead, body, cta. Creative mode had since added a checklist
-and a stat badge, and this session added three more content blocks, all of
+and a stat badge, and three more content blocks were added, all of
 which are printed on the creative exactly like the headline is. None of them
 were counted. A live mechanism-archetype run put roughly forty words on a Meta
 square whose limit is fifteen and reported nothing wrong, because the four
@@ -599,7 +599,7 @@ transparent. The canvas is then free, so it is a quiet brand gradient rather
 than a borrowed photographic grey. The cached-image path is handled with an
 effect that samples on mount when the image is already complete.
 
-**Two bugs found while fixing it, both mine, both from this session.** The
+**Two bugs found while fixing it, both introduced by the same work.** The
 export guard added in C-015 assigned `img.onload`, which replaced the
 artboard's own handler, so a wait added to make exports more faithful was
 quietly making them less so; it uses `addEventListener` with a timeout now. And

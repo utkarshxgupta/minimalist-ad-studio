@@ -16,10 +16,9 @@ import { check, ok, report } from "./assert";
 /**
  * Files that make citations a reader is expected to be able to follow.
  *
- * This started narrower. docs/DESIGN.md was excluded because it named
- * docs/DECISIONS.md before that file existed, which is a legitimate thing for a
- * design note to do and an illegitimate thing for a rule to do. The decision doc
- * is now written, so the carve-out has no justification left and is gone.
+ * Every document that cites a path is listed, with no carve-outs. A doc naming
+ * a file that does not exist is the same class of error as a rule citing a
+ * clause that does not exist, which is the failure this whole project is about.
  */
 const SOURCES = [
   "README.md",
@@ -33,8 +32,7 @@ const SOURCES = [
   "docs/KNOWN-LIMITATIONS.md",
   "docs/DECISIONS.md",
   "docs/DECISION-LOG.md",
-  "docs/DESIGN.md",
-  "docs/RULE-PROPOSALS.md",
+  "docs/RULE-DERIVATION.md",
 ];
 
 /**

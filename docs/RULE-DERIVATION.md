@@ -1,8 +1,14 @@
-# Rule proposals for human grading
+# Rule derivation record
 
-18 proposed rules, derived from 179 corpus observations and verified regulatory
-text. Nothing here is in `standard/` yet. Severity is the column that needs a
-human decision, because severity is what the tool will be asked to defend.
+How each rule in `standard/claims.rules.yaml` was arrived at: what the corpus or
+the regulation actually supported, what severity was argued for and against, and
+which candidates were cut. The shipped rulebook is the rulebook; this is the
+reasoning behind it, kept because a rule nobody can interrogate is the thing
+this project exists to replace.
+
+Derived from 179 corpus observations and verified regulatory text. Severity was
+the column that needed deciding, because severity is what the tool is asked to
+defend.
 
 Corpus: 130 observations from 8 beminimalist.co product pages, 49 from four
 competitor brands (Mamaearth, The Derma Co, Plum, Foxtale), 1 absence record for
@@ -99,7 +105,7 @@ Proposed WARN. Arguably pedantic; flagged as a candidate for cutting.
 From `"bid adieu to acne & blemishes for good"` (Mamaearth).
 Matcher: `permanently`, `forever`, `for good`, `guaranteed`, `100% (clear|free of acne)`, `never again`.
 
-### POLICY-009, testimonial as typical result — **severity undecided**
+### POLICY-009, testimonial as typical result
 Observed: `"Nothing else worked on my pimples and marks except this serum"`,
 `"Just 2 months in and my skin is clearer than ever"`.
 ASCI 1.4 prohibits misleading by implication. An untypical result presented
@@ -149,7 +155,7 @@ first, in titles) and `"Pure 10% Niacinamide"` (percentage first, in body).
 The rule is adjacency, not order. A bare percentage with no adjacent ingredient
 is the violation.
 
-### LANG-004 — flagged as weak
+### LANG-004, cut as unsupported
 The patch-test note `"The product has been evaluated for safety through patch
 testing under the supervision of a Dermatologist"` appears on 2 of 4 pages in
 batch A and is absent from the Niacinamide page. **The brand is not consistent
@@ -158,12 +164,19 @@ here, so the corpus does not support a rule.** Proposed as `inference`, not
 
 ---
 
-## Decisions needed from the human
+## Decisions taken
 
-1. **POLICY-009 severity.** BLOCK or WARN. Argued both ways above.
-2. **POLICY-007.** Keep or cut. Possibly pedantic.
-3. **LANG-004.** Keep as inference, or cut. The corpus does not support it.
-4. Any severity on the table you disagree with.
+1. **POLICY-009 severity: BLOCK.** A testimonial carrying a quantified or
+   absolute claim is a substantiation problem wearing a customer's voice, and
+   substantiation does not get an override.
+2. **POLICY-007: kept.** Approximation on a quantified claim looked pedantic
+   until the red team used it, hedging a number into deniability while keeping
+   its persuasive force.
+3. **LANG-004: cut.** The corpus did not support it, and a rule that cannot cite
+   an observation is an opinion with a rule ID. LANG-003 was cut for the same
+   reason at v1.1.0.
+
+The shipped rulebook is 18 rules: 12 policy, 4 tone, 2 language.
 
 ## What is deliberately not proposed
 

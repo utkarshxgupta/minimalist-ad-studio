@@ -2,7 +2,7 @@
 #
 # Derived from 179 corpus observations (standard/corpus/raw/) and verified
 # regulatory text (standard/regulatory-sources.md). Severity graded by a human
-# against docs/RULE-PROPOSALS.md.
+# against docs/RULE-DERIVATION.md.
 #
 # GOVERNING PRINCIPLE, derived from the corpus rather than from the brief:
 #
@@ -453,4 +453,4 @@ rules:
 # page. The brand is not consistent, so encoding it would have been
 # manufacturing a pattern from noise. Cut rather than relabelled as inference.
 #
-# See docs/RULE-PROPOSALS.md for what each looked like before it was cut.
+# See docs/RULE-DERIVATION.md for what each looked like before it was cut.

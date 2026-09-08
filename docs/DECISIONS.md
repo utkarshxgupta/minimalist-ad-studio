@@ -1,7 +1,9 @@
 # Decision doc
 
-One page, against the three things the brief asks for. The long-form reasoning
-behind every other decision is in `docs/DECISION-LOG.md`.
+The rules this tool enforces and where they came from, what was deliberately
+left out, and the decision least likely to survive contact with real data.
+Every other decision, in long form with its rejected alternatives, is in
+`docs/DECISION-LOG.md`.
 
 The reading that drove everything: reviewers disagreeing while ads bounce for
 days is not a speed problem, it is the absence of a written standard, which
